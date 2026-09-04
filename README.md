@@ -99,8 +99,12 @@ curl -H "Authorization: Bearer <.env.localのCRON_SECRET>" http://localhost:3000
 
 1. GitHubリポジトリを作成し、このプロジェクトをpush
 2. [vercel.com](https://vercel.com) でプロジェクトを作成しリポジトリを接続
-3. 環境変数を設定(`.env.local` と同じ項目一式。`NEXT_PUBLIC_*` はクライアントにも公開されます)
+3. 環境変数を設定(`.env.local` と同じ項目一式。`NEXT_PUBLIC_*` はクライアントにも公開されます)。
+   **`MAX_ARTICLES_PER_RUN` は `5` を推奨**(実機検証の結果、10件だとVercelのサーバーレス
+   関数のタイムアウト(60秒)に達することを確認済み)
 4. デプロイ後、SupabaseのAuth URL ConfigurationのSite URL/Redirect URLsを本番ドメインに更新
+5. 環境変数はデプロイ後に追加すると反映に再デプロイが必要な場合があります
+   (Vercelダッシュボードの Deployments > 最新デプロイの「...」> Redeploy)
 
 ### 10. 定期収集の設定(1日3回・GitHub Actions)
 
@@ -171,7 +175,7 @@ scripts/seed-sources.ts       # sources.ts → Supabase への投入スクリプ
 | AIモデル | `gemini-3.5-flash-lite`(既定) | Google AI Studioの無料枠(クレジットカード不要)で実際に動作確認済み |
 | ファクトチェックのWeb検索 | 既定でOFF(`ENABLE_WEB_SEARCH_FACTCHECK=false`) | **実機検証の結果、Google Search Groundingは無料枠のみのアカウントだと429エラーになり、Google Cloud側の課金設定(Billing有効化)が必要と判明**。クレジットカード登録なしで運用する場合はOFFのままにしてください(その場合、本文の内部矛盾・妥当性のみで判定する簡易ファクトチェックになります) |
 | 収集頻度 | 1日3回(GitHub Actions、朝6時・昼12時・夕方18時) | Vercel Hobbyのcron制限(1日1回)を回避しつつ追加費用なし。ページ送り等による追加収集は行わない |
-| 1回の収集件数 | `MAX_ARTICLES_PER_RUN=10`(既定) | サーバーレス関数の実行時間上限(Vercel Hobbyは短め)に収めるため |
+| 1回の収集件数 | Vercelでは`MAX_ARTICLES_PER_RUN=5`を推奨 | サーバーレス関数の実行時間上限(60秒)に収めるため。実機検証で10件だとタイムアウトすることを確認済み |
 
 無料枠を使い切る主なリスクは「記事数を大幅に増やす」「Cronを非常に高頻度にする」場合です。
 その場合は [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing)
