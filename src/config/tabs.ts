@@ -8,6 +8,5 @@ export const TABS = [
   { href: "/international-politics", label: "国際政治" },
   { href: "/it", label: "IT" },
   { href: "/entertainment", label: "エンタメ" },
-  { href: "/radio", label: "ラジオ" },
   { href: "/weather", label: "気象予報" },
 ] as const;

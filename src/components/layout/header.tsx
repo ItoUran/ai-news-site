@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Radio } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { TabNav } from "./tab-nav";
 import { ThemeToggle } from "./theme-toggle";
@@ -48,7 +49,7 @@ export async function Header() {
       </div>
 
       {/* 題字(マストヘッド) */}
-      <div className="max-w-6xl mx-auto px-4 py-4">
+      <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
         <Link href="/explore" className="inline-block">
           <h1 className="font-heading text-3xl sm:text-4xl font-black tracking-tight text-foreground">
             AI<span className="text-primary">ニュース</span>
@@ -56,6 +57,15 @@ export async function Header() {
           <p className="text-xs text-muted-foreground mt-1">
             AIが集め、AIが確かめる、あなたのためのニュース
           </p>
+        </Link>
+
+        <Link
+          href="/radio"
+          aria-label="AIニュースラジオを開く"
+          title="AIニュースラジオ"
+          className="group inline-flex size-12 sm:size-14 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105"
+        >
+          <Radio className="size-5 sm:size-6 transition-transform group-hover:rotate-12" />
         </Link>
       </div>
 

@@ -13,7 +13,7 @@
  *   3. .env.local に NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY を設定
  *
  * 実行: npm run radio:generate
- * (Windowsタスクスケジューラ等で1日1回の定期実行を推奨。README参照)
+ * (Windowsタスクスケジューラで1日3回・6時/12時/18時の定期実行を推奨。README参照)
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -23,7 +23,9 @@ import type { Database, ArticleRow } from "../src/types/database";
 import { generateRadioScript } from "../src/lib/radio/generateScript";
 import { synthesizeScript, isVoicevoxRunning } from "../src/lib/tts/voicevox";
 
-const HOURS_LOOKBACK = Number(process.env.RADIO_HOURS_LOOKBACK ?? 24);
+// 1日3回(6時/12時/18時)更新になったため、既定の対象期間も前回更新分からの
+// 差分に近い8時間に短縮(24時間のままだと3回とも似た内容になってしまうため)。
+const HOURS_LOOKBACK = Number(process.env.RADIO_HOURS_LOOKBACK ?? 8);
 const MAX_ARTICLES = Number(process.env.RADIO_MAX_ARTICLES ?? 15);
 
 async function main() {
@@ -70,14 +72,9 @@ async function main() {
   }
 
   const now = new Date();
-  const dateLabel = new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(now);
 
   console.log(`台本を生成中...(対象記事: ${articles.length}件)`);
-  const { title, script } = await generateRadioScript(articles as ArticleRow[], dateLabel);
+  const { title, script } = await generateRadioScript(articles as ArticleRow[], now);
   console.log(`台本生成完了: 「${title}」(${script.length}字)`);
 
   console.log("音声合成中...(数分かかる場合があります)");

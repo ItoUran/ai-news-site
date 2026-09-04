@@ -287,14 +287,19 @@ Unregister-ScheduledTask -TaskName "AINewsSiteLocalIngest" -Confirm:$false  # �
 
 ## AIラジオ機能(オプション)
 
-その日収集したニュースをもとに、AIが台本を書き、音声合成で読み上げる「ラジオ」タブです。
-台本生成はローカルLLM(Ollama)、音声合成は[VOICEVOX](https://voicevox.hiroshiba.jp/)(無料の
-日本語音声合成ソフト)を使うため、**追加費用なし**で運用できます。
+その日収集したニュースをもとに、AIが台本を書き、音声合成で読み上げる音声番組です。
+タブではなく、ヘッダー右上のラジオアイコンのボタン(📻)から `/radio` ページを開く形になって
+います(`src/components/layout/header.tsx`)。台本生成はローカルLLM(Ollama)、音声合成は
+[VOICEVOX](https://voicevox.hiroshiba.jp/)(無料の日本語音声合成ソフト)を使うため、
+**追加費用なし**で運用できます。
 
-**重要な注意点**: 台本は世間の反応(SNS等)に触れることがありますが、これは**AIによる推測・
-一般論**であり、実際の投稿を引用しているわけではありません(`src/lib/radio/generateScript.ts`
-のプロンプトで、断定的な言い回しを避け「〜という声もありそうです」といった推測表現を
-使うよう指示しています)。実際の投稿データを取得しているわけではない点にご注意ください。
+- **更新頻度**: 1日3回(6時/12時/18時ごろ)。ニュース収集の元々のリズムに合わせています。
+- **台本の冒頭**: 「(年)年(月)月(日)日(時)時のニュースです。」という読み上げから必ず始まります
+  (AIに書かせるのではなく `src/lib/radio/generateScript.ts` の `buildOpeningLine` で確実に
+  組み立てて先頭に付加しているため、時刻表記のブレはありません)。
+- **重要な注意点**: 台本は世間の反応(SNS等)に触れることがありますが、これは**AIによる推測・
+  一般論**であり、実際の投稿を引用しているわけではありません(同ファイルのプロンプトで、
+  断定的な言い回しを避け「〜という声もありそうです」といった推測表現を使うよう指示しています)。
 
 ### セットアップ
 
@@ -306,28 +311,43 @@ Unregister-ScheduledTask -TaskName "AINewsSiteLocalIngest" -Confirm:$false  # �
    ```bash
    npm run radio:generate
    ```
-   直近24時間の合格記事から台本を作成し、音声合成後にSupabase Storageへアップロード、
-   `radio_episodes` テーブルに登録します(所要時間は記事数・PC性能に依存、数分程度)。
+   直近8時間(既定、`RADIO_HOURS_LOOKBACK`)の合格記事から台本を作成し、音声合成後に
+   Supabase Storageへアップロード、`radio_episodes` テーブルに登録します
+   (所要時間は記事数・PC性能に依存、数十秒〜数分程度)。
 
-### 1日1回の自動実行(Windowsタスクスケジューラ)
+### 1日3回の自動実行(Windowsタスクスケジューラ)
 
 ニュース収集(GitHub Actions)と異なり、ラジオ生成はローカルのVOICEVOX/Ollamaに依存するため
-**あなたのPC上でのみ実行できます**。タスクスケジューラへの登録例:
+**あなたのPC上でのみ実行できます**。[scripts/run-radio-generate.ps1](scripts/run-radio-generate.ps1)
+をタスクスケジューラに登録することで、6時/12時/18時に自動実行できます
+(Ollamaは未起動なら自動起動を試みます。VOICEVOXはインストール場所が環境依存のため
+自動起動はせず、起動していなければその回の生成をスキップしてログに記録するだけです。
+普段からVOICEVOXを常駐させておくことを推奨します)。
 
-1. 「タスクスケジューラ」を開き「基本タスクの作成」
-2. トリガー: 毎日、好きな時刻(例: 19:00、GitHub Actionsの18時収集の後がおすすめ)
-3. 操作: プログラムの開始
-   - プログラム: `npm.cmd` のフルパス(例: `C:\Program Files\nodejs\npm.cmd`)
-   - 引数: `run radio:generate`
-   - 開始場所: プロジェクトフォルダのパス(例: `C:\Users\<user>\Documents\ai-news-site`)
-4. VOICEVOXも一緒に自動起動したい場合は、上記の前に別タスクとして
-   `vv-engine\run.exe` の起動も登録してください
+```powershell
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\Users\ritou\Documents\ai-news-site\scripts\run-radio-generate.ps1"'
+$triggers = @(
+    New-ScheduledTaskTrigger -Daily -At "06:00"
+    New-ScheduledTaskTrigger -Daily -At "12:00"
+    New-ScheduledTaskTrigger -Daily -At "18:00"
+)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -MultipleInstances IgnoreNew
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName "AINewsSiteRadio" -Action $action -Trigger $triggers -Settings $settings -Principal $principal -Description "AI News Site: radio generation, 6:00/12:00/18:00 daily."
+```
+
+確認・削除:
+```powershell
+Get-ScheduledTaskInfo -TaskName "AINewsSiteRadio"   # 前回実行結果・次回実行時刻
+Unregister-ScheduledTask -TaskName "AINewsSiteRadio" -Confirm:$false  # 削除
+```
 
 ### カスタマイズ
 
 - `VOICEVOX_SPEAKER`: 話者ID(既定は2 = 四国めたん ノーマル)。起動中のVOICEVOXで
   `http://127.0.0.1:50021/speakers` を開くと一覧を確認できます
-- `RADIO_HOURS_LOOKBACK` / `RADIO_MAX_ARTICLES`: 台本に使う記事の対象期間・件数
+- `RADIO_HOURS_LOOKBACK`(既定8時間) / `RADIO_MAX_ARTICLES`: 台本に使う記事の対象期間・件数。
+  1日3回更新なので、24時間のままだと3回とも似た内容になりやすい点に注意してください
 
 ## セキュリティ
 

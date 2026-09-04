@@ -11,7 +11,7 @@ export default async function RadioPage() {
       <div>
         <h2 className="font-heading text-2xl font-bold">ラジオ</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          AIがその日のニュースをまとめて読み上げる音声番組です(1日1回更新)。
+          AIがその日のニュースをまとめて読み上げる音声番組です(1日3回・6時/12時/18時ごろ更新)。
           世間の反応への言及はAIによる推測であり、実際の投稿の引用ではありません。
         </p>
       </div>
