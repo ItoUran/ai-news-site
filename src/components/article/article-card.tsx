@@ -4,6 +4,7 @@ import { ja } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { CATEGORY_META } from "@/types/article";
 import type { ArticleWithSource } from "@/types/database";
+import { categoryPlaceholderThumbnail } from "@/lib/thumbnail";
 import { LikeDislikeButtons } from "./like-dislike-buttons";
 
 export function ArticleCard({
@@ -21,17 +22,13 @@ export function ArticleCard({
   return (
     <div className="group/card flex flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 h-full">
       <Link href={`/article/${article.id}`} className="flex flex-col flex-1">
-        {article.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={article.image_url}
-            alt=""
-            className="aspect-video w-full object-cover bg-muted"
-            loading="lazy"
-          />
-        ) : (
-          <div className="aspect-video w-full bg-muted" aria-hidden />
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={article.image_url || categoryPlaceholderThumbnail(article.category)}
+          alt=""
+          className="aspect-video w-full object-cover bg-muted"
+          loading="lazy"
+        />
 
         <div className="flex flex-col flex-1 gap-2 p-4">
           <Badge className={meta.badgeClass}>{meta.label}</Badge>

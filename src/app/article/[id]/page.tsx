@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CATEGORY_META } from "@/types/article";
+import { categoryPlaceholderThumbnail } from "@/lib/thumbnail";
 import { LikeDislikeButtons } from "@/components/article/like-dislike-buttons";
 
 export const revalidate = 300;
@@ -77,14 +78,12 @@ export default async function ArticleDetailPage({
         )}
       </div>
 
-      {article.image_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={article.image_url}
-          alt=""
-          className="w-full rounded-xl aspect-video object-cover bg-muted"
-        />
-      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={article.image_url || categoryPlaceholderThumbnail(article.category)}
+        alt=""
+        className="w-full rounded-xl aspect-video object-cover bg-muted"
+      />
 
       <p className="text-base leading-relaxed whitespace-pre-line">
         {article.translated_summary}
