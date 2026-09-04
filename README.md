@@ -1,0 +1,279 @@
+# AIニュース
+
+AIが国内外の様々なニュースソース(英語ソース・個人ブログを含む)を自動収集し、AIが
+ファクトチェックに合格した記事だけを日本語で表示するニュースサイトです。
+
+- **探索**: 普段あまり読まないジャンルの記事を意図的に表示。👍/👎で反応するとおすすめに反映
+- **おすすめ**: クリック履歴と探索での「気に入った」をもとにパーソナライズ
+- **国内ニュース / 国内政治 / 国際ニュース / 国際政治 / IT**: 固定カテゴリタブ(10件/ページ)
+- **気象予報**: 気象庁(JMA)公式データをリアルタイム表示
+- **ラジオ**(オプション): AIが台本を書き、VOICEVOXで読み上げる音声ニュース(1日1回更新)
+- ログイン(メール/パスワード + Google)でユーザーごとの好みを保存
+- ダークモード対応・新聞ポータル風デザイン
+
+## 技術スタック
+
+- Next.js 16(App Router / TypeScript)+ Tailwind CSS v4 + shadcn/ui(base-nova, @base-ui/react)
+- Supabase(Postgres + Auth + Storage、`@supabase/ssr`、Row Level Security)
+- Google Gemini API(`@google/genai`。翻訳・要約・カテゴリ分類・ファクトチェック。
+  サーバー側Google Search Grounding併用。**無料枠のみで運用可能**)
+  - GPU搭載PCがあれば、Ollama + Qwen3によるローカルLLMでの完全無料運用も選択可能(後述)
+- GitHub Actions による1日3回(朝6/昼12/夕18時)の定期収集(Vercel Cronは使用しない)
+- 気象庁(JMA)公式JSON API(APIキー不要)
+- VOICEVOX(ローカル、オプション)によるAIラジオ音声合成
+
+## セットアップ手順
+
+### 1. 依存関係のインストール
+
+```bash
+npm install
+```
+
+### 2. Supabaseプロジェクトの作成
+
+1. [supabase.com](https://supabase.com) で新規プロジェクトを作成
+2. プロジェクト設定 > API から `Project URL` / `anon public key` / `service_role key` を取得
+3. SQL Editor で `supabase/migrations/` 内のファイルを **番号順に** 実行
+   (または Supabase CLI で `supabase db push`)
+4. Authentication > Providers で **Email** と **Google** を有効化
+   - Googleを有効化するには、先に手順3(Google Cloud Console)が必要
+5. Authentication > URL Configuration で
+   - Site URL: 本番のVercelドメイン(例: `https://your-app.vercel.app`)
+   - Redirect URLs: `http://localhost:3000/**` と本番ドメインの `**` を追加
+
+### 3. Google OAuthクライアントの作成
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でOAuth 2.0クライアントID(ウェブアプリケーション)を作成
+2. 承認済みのリダイレクトURIに以下を追加:
+   ```
+   https://<あなたのSupabaseプロジェクトref>.supabase.co/auth/v1/callback
+   ```
+3. 発行されたClient ID / Client SecretをSupabaseの Authentication > Providers > Google に貼り付け
+
+### 4. Gemini APIキーの発行
+
+[aistudio.google.com](https://aistudio.google.com/apikey) で「Get API key」からAPIキーを発行してください。
+**クレジットカード登録は不要**で、無料枠のみで利用開始できます。
+
+### 5. 環境変数の設定
+
+`.env.local.example` を `.env.local` にコピーし、上記で取得した値を設定してください。
+
+```bash
+cp .env.local.example .env.local
+```
+
+### 6. ニュースソースの初期登録
+
+`.env.local` 設定後、初期ソース一覧(`src/config/sources.ts`)をSupabaseに登録します。
+
+```bash
+npm run seed:sources
+```
+
+個人ブログ等、追加したいソースがあれば `src/config/sources.ts` に追記して再実行してください
+(RSS/Atomフィード形式のURLが必要です)。
+
+### 7. ローカル起動
+
+```bash
+npm run dev
+```
+
+http://localhost:3000 を開いてください。
+
+### 8. 収集パイプラインの手動テスト
+
+記事はVercel Cronから `/api/cron/ingest` が定期的に叩かれることで収集されます。
+ローカルで動作確認する場合:
+
+```bash
+curl -H "Authorization: Bearer <.env.localのCRON_SECRET>" http://localhost:3000/api/cron/ingest
+```
+
+`ingestion_runs` テーブルと `articles` テーブルに結果が記録されます。
+ファクトチェックに合格(`fact_check_status = 'pass'`)した記事のみが各タブに表示されます。
+
+### 9. Vercelへのデプロイ
+
+1. GitHubリポジトリを作成し、このプロジェクトをpush
+2. [vercel.com](https://vercel.com) でプロジェクトを作成しリポジトリを接続
+3. 環境変数を設定(`.env.local` と同じ項目一式。`NEXT_PUBLIC_*` はクライアントにも公開されます)
+4. デプロイ後、SupabaseのAuth URL ConfigurationのSite URL/Redirect URLsを本番ドメインに更新
+
+### 10. 定期収集の設定(1日3回・GitHub Actions)
+
+**Vercel Hobbyプラン(無料)のCronは1日1回までの制限があるため**、`vercel.json`によるVercel Cronは
+使わず、**GitHub Actionsで1日3回(朝6時・昼12時・夕方18時 JST)** `/api/cron/ingest` を呼び出す
+構成にしています(追加費用なし)。ページ送り等ユーザー操作をきっかけにAI収集が走ることは
+一切なく、収集はこの定時実行のみに限定されています([.github/workflows/ingest.yml](.github/workflows/ingest.yml))。
+
+設定手順:
+1. GitHubリポジトリの **Settings > Secrets and variables > Actions** を開く
+2. 以下のRepository secretsを追加:
+   - `SITE_URL`: デプロイ済みのサイトURL(例: `https://your-app.vercel.app`)
+   - `CRON_SECRET`: `.env.local`/Vercelの環境変数と同じ値
+3. これで毎日6時・12時・18時に自動実行されます。GitHub の Actions タブから手動実行(workflow_dispatch)も可能です
+
+スケジュールを変更したい場合は `.github/workflows/ingest.yml` の `cron` 式(UTC基準)を編集してください。
+
+## ディレクトリ構成
+
+```
+src/
+  app/                     # Next.js App Router のページ・ルート
+    explore/ recommended/ domestic/ domestic-politics/
+    international-politics/ it/ weather/ article/[id]/
+    login/ settings/ auth/ api/
+  components/
+    layout/                # ヘッダー・タブナビ・テーマ切替
+    article/                # 記事カード・いいね/よくないねボタン
+    weather/                # 気象予報UI
+    ui/                     # shadcn/ui プリミティブ
+  lib/
+    supabase/               # client/server/admin/middleware ヘルパー
+    ai/                     # Gemini連携(ファクトチェック・翻訳パイプライン)
+    ingestion/               # RSS取得・本文抽出・重複排除
+    recommendation/          # おすすめ・探索のスコアリング
+    weather/                 # JMA連携
+  config/
+    sources.ts               # 収集元RSSフィードの初期シード
+    jma-areas.ts              # 気象庁エリアコード一覧
+supabase/migrations/          # SQLマイグレーション(番号順に適用)
+scripts/seed-sources.ts       # sources.ts → Supabase への投入スクリプト
+```
+
+## 設計上のポイント
+
+- **ファクトチェック**: 収集した全記事はAI(Gemini + Google Search Grounding)による判定を経て
+  `pending / pass / fail / needs_review` のいずれかになります。**`pass` の記事のみが
+  Row Level Security で一般公開**され、それ以外は構造的にユーザーへ表示されません
+  (`articles` テーブルの `fact_check_status = 'pass'` ポリシー)。
+- **著作権への配慮**: 元記事の全文は保存・表示せず、AIによる要約のみを表示し、
+  「元記事を読む」リンクで出典元へ誘導します。
+- **おすすめ/探索のスコアリング**: `src/lib/recommendation/score.ts` にNode側で実装。
+  ベクトルDB無しのMVP構成(カテゴリ親和度 + キーワード一致 + 新しさ + 多様性)。
+  将来的にpgvector + 埋め込みモデルへ拡張可能な設計にしています。
+- **未ログインでも閲覧可能**: 全タブは未ログインでも閲覧できますが、👍/👎やパーソナライズには
+  ログインが必要です(未ログイン時はログイン画面へ誘導)。
+
+## 無料で運用するには
+
+ホスティング・DB・AIともに、想定利用規模(1日10記事程度の収集)であれば**実質無料**で
+運用できるように構成しています。
+
+| 項目 | 内容 | 無料である理由 |
+|---|---|---|
+| Vercelホスティング | Hobbyプラン | 個人利用の範囲なら無料枠内 |
+| Supabase | Freeプラン | 500MB DB・認証込みで無料。**ただし1週間アクセスが無いと自動一時停止**するため、低頻度アクセスの個人サイトの場合は時々アクセスするか、Supabase側の設定でpingを検討してください |
+| 気象庁API | 無料・APIキー不要 | 公式公開API |
+| AIモデル | `gemini-3.5-flash-lite`(既定) | Google AI Studioの無料枠(クレジットカード不要)で実際に動作確認済み |
+| ファクトチェックのWeb検索 | 既定でOFF(`ENABLE_WEB_SEARCH_FACTCHECK=false`) | **実機検証の結果、Google Search Groundingは無料枠のみのアカウントだと429エラーになり、Google Cloud側の課金設定(Billing有効化)が必要と判明**。クレジットカード登録なしで運用する場合はOFFのままにしてください(その場合、本文の内部矛盾・妥当性のみで判定する簡易ファクトチェックになります) |
+| 収集頻度 | 1日3回(GitHub Actions、朝6時・昼12時・夕方18時) | Vercel Hobbyのcron制限(1日1回)を回避しつつ追加費用なし。ページ送り等による追加収集は行わない |
+| 1回の収集件数 | `MAX_ARTICLES_PER_RUN=10`(既定) | サーバーレス関数の実行時間上限(Vercel Hobbyは短め)に収めるため |
+
+無料枠を使い切る主なリスクは「記事数を大幅に増やす」「Cronを非常に高頻度にする」場合です。
+その場合は [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing)
+で最新の無料枠条件を確認してください(無料枠のデータはGoogleのモデル改善に利用される場合が
+あります。ニュース記事という公開情報が対象なので機密性は低い想定ですが、念のため記載します)。
+
+**Web検索ありのファクトチェックを使いたい場合**: Google Cloud Consoleで対象プロジェクトの
+Billing(課金設定)を有効化すれば `ENABLE_WEB_SEARCH_FACTCHECK=true` が動作する見込みです
+(未検証。カード登録は必要になりますが、想定利用量なら無料枠内に収まる可能性は高いです)。
+
+**さらに精度を上げたい場合**: `.env.local` の `GEMINI_MODEL` を `gemini-3.5-flash` 等の
+上位モデルに変更できますが、無料枠の対象外になる可能性があるため使用量画面で確認してください。
+
+## ローカルLLM(Ollama)で完全無料運用する(オプション)
+
+GPU搭載PC(目安: VRAM 12GB以上)があれば、Gemini APIすら使わず**完全にオフラインのローカルLLM**
+で記事収集を行うこともできます。RTX 3060 12GBクラスで実機動作確認済みです。
+
+### 仕組み
+
+サイト本体(閲覧・ログイン・気象予報)はこれまで通りVercelにホスティングしたままにし、
+**記事収集(AI処理)だけ**をあなたのPC上のスクリプトに切り出します。Vercel(クラウド)から
+ローカルPC上のOllamaを直接呼び出すことはできない(自宅PCをインターネットに公開しない限り)ため、
+この収集スクリプトは手動実行、またはWindowsタスクスケジューラ等で「PCが起動している時だけ」
+定期実行する運用になります。書き込み先のSupabaseは共通なので、サイト側の閲覧には影響ありません。
+
+### セットアップ
+
+1. [Ollama](https://ollama.com/download) をインストール
+2. モデルを取得(日本語を含む多言語性能が高いQwen3を推奨):
+   ```bash
+   ollama pull qwen3:8b
+   ```
+   (VRAMに余裕があれば `qwen3:14b` などより大きいモデルも可)
+3. `.env.local` に以下を追加(Gemini関連の設定は不要になります):
+   ```
+   OLLAMA_MODEL=qwen3:8b
+   OLLAMA_HOST=http://127.0.0.1:11434
+   ```
+4. Ollamaが起動していることを確認(`ollama serve`、またはインストール後は常駐アプリとして自動起動)
+5. 収集を実行:
+   ```bash
+   npm run ingest:local
+   ```
+
+### Gemini版との違い
+
+- **完全無料・レート制限無し**(電気代のみ)
+- **web検索によるファクトチェックはできません**(ローカルモデルには検索ツールが無いため、常に
+  本文の内部整合性のみで判定する簡易ファクトチェックになります。`src/lib/ai/pipeline-ollama.ts`)
+- PCが起動していない間は新しい記事が増えません(サイトの閲覧自体はVercel側なのでいつでも可能)
+- 実装は `src/lib/ai/pipeline-ollama.ts` + `scripts/ingest-local.ts`。収集ループ本体
+  (`src/lib/ingestion/runIngestion.ts`)はGemini版と共有しているため、プロバイダ間で
+  ファクトチェック方針以外のロジックは統一されています
+
+## AIラジオ機能(オプション)
+
+その日収集したニュースをもとに、AIが台本を書き、音声合成で読み上げる「ラジオ」タブです。
+台本生成はローカルLLM(Ollama)、音声合成は[VOICEVOX](https://voicevox.hiroshiba.jp/)(無料の
+日本語音声合成ソフト)を使うため、**追加費用なし**で運用できます。
+
+**重要な注意点**: 台本は世間の反応(SNS等)に触れることがありますが、これは**AIによる推測・
+一般論**であり、実際の投稿を引用しているわけではありません(`src/lib/radio/generateScript.ts`
+のプロンプトで、断定的な言い回しを避け「〜という声もありそうです」といった推測表現を
+使うよう指示しています)。実際の投稿データを取得しているわけではない点にご注意ください。
+
+### セットアップ
+
+1. [VOICEVOX](https://voicevox.hiroshiba.jp/) をインストール(`winget install HiroshibaKazuyuki.VOICEVOX` でも可)
+2. VOICEVOXを起動しておく(通常のGUIアプリ起動でエンジンも一緒に立ち上がります。
+   ヘッドレスで動かしたい場合は `vv-engine\run.exe` を直接実行)
+3. Ollamaも起動しておく(ローカルLLM収集機能と共用。「ローカルLLMで完全無料運用する」参照)
+4. 生成を実行:
+   ```bash
+   npm run radio:generate
+   ```
+   直近24時間の合格記事から台本を作成し、音声合成後にSupabase Storageへアップロード、
+   `radio_episodes` テーブルに登録します(所要時間は記事数・PC性能に依存、数分程度)。
+
+### 1日1回の自動実行(Windowsタスクスケジューラ)
+
+ニュース収集(GitHub Actions)と異なり、ラジオ生成はローカルのVOICEVOX/Ollamaに依存するため
+**あなたのPC上でのみ実行できます**。タスクスケジューラへの登録例:
+
+1. 「タスクスケジューラ」を開き「基本タスクの作成」
+2. トリガー: 毎日、好きな時刻(例: 19:00、GitHub Actionsの18時収集の後がおすすめ)
+3. 操作: プログラムの開始
+   - プログラム: `npm.cmd` のフルパス(例: `C:\Program Files\nodejs\npm.cmd`)
+   - 引数: `run radio:generate`
+   - 開始場所: プロジェクトフォルダのパス(例: `C:\Users\<user>\Documents\ai-news-site`)
+4. VOICEVOXも一緒に自動起動したい場合は、上記の前に別タスクとして
+   `vv-engine\run.exe` の起動も登録してください
+
+### カスタマイズ
+
+- `VOICEVOX_SPEAKER`: 話者ID(既定は2 = 四国めたん ノーマル)。起動中のVOICEVOXで
+  `http://127.0.0.1:50021/speakers` を開くと一覧を確認できます
+- `RADIO_HOURS_LOOKBACK` / `RADIO_MAX_ARTICLES`: 台本に使う記事の対象期間・件数
+
+## 今後の拡張候補(未実装)
+
+- pgvector + 埋め込みモデルによる類似度ベースのレコメンド精度向上
+- 収集ソース管理画面(現状は `src/config/sources.ts` の編集 + シードスクリプト)
+- 通知・メールダイジェスト
+- 記事の言語別フィルタ・全文検索

@@ -1,0 +1,27 @@
+name: Scheduled News Ingestion
+
+# 1日3回(日本時間 6:00 / 12:00 / 18:00 = UTC 21:00前日 / 3:00 / 9:00)、
+# デプロイ済みサイトの /api/cron/ingest を呼び出して記事を収集する。
+# Vercel Hobbyプランのcron制限(1日1回)を回避するため、GitHub Actionsの
+# 無料枠でスケジュール実行する。これ以外のタイミングでAI収集は一切実行されない
+# (ページ送り等での自動追加収集は行わない設計)。
+#
+# 事前準備: このリポジトリの Settings > Secrets and variables > Actions で
+#   SITE_URL   = デプロイ済みのサイトURL(例: https://your-app.vercel.app)
+#   CRON_SECRET = .env.local / Vercelの環境変数と同じ値
+# を登録してください。
+
+on:
+  schedule:
+    - cron: "0 21,3,9 * * *"
+  workflow_dispatch: {} # GitHub Actionsの画面から手動実行したい場合用
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/ingest
+        run: |
+          curl -sf --max-time 90 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SITE_URL }}/api/cron/ingest"
