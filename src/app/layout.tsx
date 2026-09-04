@@ -3,6 +3,7 @@ import { Noto_Sans_JP, Noto_Serif_JP } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Header } from "@/components/layout/header";
+import { SwipeNavigation } from "@/components/layout/swipe-navigation";
 
 const notoSansJP = Noto_Sans_JP({
   variable: "--font-noto-sans-jp",
@@ -34,7 +35,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Header />
-          <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6">{children}</main>
+          <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6">
+            <SwipeNavigation>{children}</SwipeNavigation>
+          </main>
         </ThemeProvider>
       </body>
     </html>

@@ -3,19 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-
-const TABS = [
-  { href: "/explore", label: "探索" },
-  { href: "/recommended", label: "おすすめ" },
-  { href: "/domestic", label: "国内ニュース" },
-  { href: "/domestic-politics", label: "国内政治" },
-  { href: "/international", label: "国際ニュース" },
-  { href: "/international-politics", label: "国際政治" },
-  { href: "/it", label: "IT" },
-  { href: "/entertainment", label: "エンタメ" },
-  { href: "/radio", label: "ラジオ" },
-  { href: "/weather", label: "気象予報" },
-] as const;
+import { TABS } from "@/config/tabs";
 
 export function TabNav() {
   const pathname = usePathname();
