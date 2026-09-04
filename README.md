@@ -5,7 +5,7 @@ AIが国内外の様々なニュースソース(英語ソース・個人ブロ�
 
 - **探索**: 普段あまり読まないジャンルの記事を意図的に表示。👍/👎で反応するとおすすめに反映
 - **おすすめ**: クリック履歴と探索での「気に入った」をもとにパーソナライズ
-- **国内ニュース / 国内政治 / 国際ニュース / 国際政治 / IT**: 固定カテゴリタブ(10件/ページ)
+- **国内ニュース / 国内政治 / 国際ニュース / 国際政治 / IT / エンタメ**: 固定カテゴリタブ(10件/ページ)
 - **気象予報**: 気象庁(JMA)公式データをリアルタイム表示
 - **ラジオ**(オプション): AIが台本を書き、VOICEVOXで読み上げる音声ニュース(1日1回更新)
 - ログイン(メール/パスワード + Google)でユーザーごとの好みを保存
@@ -274,6 +274,29 @@ GPU搭載PC(目安: VRAM 12GB以上)があれば、Gemini APIすら使わず**�
 - `VOICEVOX_SPEAKER`: 話者ID(既定は2 = 四国めたん ノーマル)。起動中のVOICEVOXで
   `http://127.0.0.1:50021/speakers` を開くと一覧を確認できます
 - `RADIO_HOURS_LOOKBACK` / `RADIO_MAX_ARTICLES`: 台本に使う記事の対象期間・件数
+
+## セキュリティ
+
+実施済みの対策:
+
+- **Row Level Security(RLS)**: 全テーブルで有効化。`articles`は`fact_check_status = 'pass'`の
+  行のみ一般公開、`sources`/`ingestion_runs`はservice-role専用、`profiles`/`user_article_interactions`
+  は本人の行のみ読み書き可、`radio_episodes`と`radio-audio`ストレージは読み取りのみ公開
+- **service_role キー**: サーバー専用コード(`lib/supabase/admin.ts`、cronルート、ローカルスクリプト)
+  でのみ使用し、クライアントに一切渡さない
+- **セキュリティヘッダー**: `X-Frame-Options`(クリックジャッキング対策)、`X-Content-Type-Options`、
+  `Referrer-Policy`、`Permissions-Policy`を全ページに付与([next.config.ts](next.config.ts))
+- **`/api/cron/ingest`の保護**: `CRON_SECRET`(強固なランダム値)によるBearer認証。実機で
+  誤ったシークレットが401で拒否されることを確認済み
+- **依存パッケージ**: `npm audit` で脆弱性0件を確認済み(定期的な再実行を推奨)
+- **XSS対策**: `dangerouslySetInnerHTML`等の危険なパターンは未使用。記事本文はAI要約のみ表示
+  (元記事全文は保存するがUIには出さない)
+
+**運用上ご確認いただきたい点**:
+- Supabaseの Authentication > Providers > Email で「Confirm email」を有効にすることを推奨します
+  (無効のままだと、他人のメールアドレスを名乗って登録できてしまいます。開発中は利便性のため
+  無効化を提案しましたが、本番運用では有効化してください)
+- `CRON_SECRET`・APIキー類は定期的なローテーションを推奨します
 
 ## 今後の拡張候補(未実装)
 
