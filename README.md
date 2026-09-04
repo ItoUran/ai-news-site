@@ -268,13 +268,18 @@ Unregister-ScheduledTask -TaskName "AINewsSiteLocalIngest" -Confirm:$false  # �
 
 - 一度生成した解説は `articles.detailed_explanation` にキャッシュされ、以後は同じ記事に
   対して再度AIを呼び出しません(クリックの度に課金・処理が走ることはありません)。
-- **なるべくOllamaを使う設計**になっています: まずローカルOllamaでの生成を試み、
-  失敗した場合のみGemini(無料枠)にフォールバックします。本番のVercelからは構造上
-  ローカルPCのOllamaに到達できない(ホームネットワークをインターネットに公開しない限り)ため、
-  デプロイ済みサイトでは実質的に常にGeminiが使われます。`npm run dev` でご自身のPC上から
-  アクセスし、かつOllamaが起動している場合はOllamaが使われます(`src/lib/ai/pipeline-ollama.ts`
-  の `generateDeepDiveOllama` / `src/lib/ai/pipeline.ts` の `generateDeepDiveGemini`)。
-- 実装: `src/app/api/articles/[id]/deep-dive/route.ts`(生成・キャッシュ)、
+- **事前生成でなるべくOllamaを使う設計**になっています: ローカルOllama収集
+  (`npm run ingest:local` / `scripts/run-local-ingest.ps1`)は、記事を1件収集する度に
+  この深掘り解説も**その場でOllamaを使って生成し、DBに保存**します
+  (`scripts/ingest-local.ts` の `onArticleInserted` フック)。そのため、ローカル収集で
+  取り込まれた記事は、ユーザーが本番サイトで「詳しく」を押した時点で**既にOllama生成済みの
+  解説がキャッシュに入っており、即座に表示されるだけ**(AI呼び出し無し)になります。
+  Gemini(`src/lib/ai/pipeline.ts` の `generateDeepDiveGemini`)は、GitHub Actions側の
+  Gemini収集で取り込まれた記事、または何らかの理由でまだ生成されていない記事に対する
+  オンデマンドのフォールバックとしてのみ使われます(本番Vercelからはローカル
+  PCのOllamaに直接到達できないため、フォールバック時は必ずGeminiになります)。
+- 実装: `src/lib/ingestion/runIngestion.ts` の `onArticleInserted`(事前生成)、
+  `src/app/api/articles/[id]/deep-dive/route.ts`(オンデマンド生成・キャッシュ)、
   `src/components/article/deep-dive-section.tsx`(ボタンUI)。
 
 **マイグレーション**: この機能を使うには `supabase/migrations/0011_add_detailed_explanation.sql`

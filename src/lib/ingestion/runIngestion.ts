@@ -14,10 +14,25 @@ export type IngestionRunResult = {
   articlesFetched: number;
   articlesPassed: number;
   articlesFailed: number;
+  deepDivesGenerated: number;
   errors: RunError[];
 };
 
 export type AnalyzeArticleFn = (input: ArticleAnalysisInput) => Promise<ArticleAnalysisResult>;
+
+/**
+ * 挿入直後(fact_check_status = 'pass' のみ)に呼ばれる任意のフック。
+ * ローカルOllama収集で「詳しく」ボタン用の解説を事前生成する用途に使う
+ * (/api/cron/ingest 側のGemini収集では渡さない=無料枠温存のため未使用)。
+ * 例外を投げても収集全体は止めない(呼び出し側のtry/catchに任せる)。
+ */
+export type OnArticleInsertedFn = (article: {
+  id: string;
+  title: string;
+  translatedSummary: string;
+  originalBody: string;
+  category: ArticleCategory;
+}) => Promise<void>;
 
 /**
  * RSS収集 → 本文抽出 → AI分析(analyzeArticleFnとして注入) → DB保存、の共通ループ。
@@ -27,9 +42,14 @@ export type AnalyzeArticleFn = (input: ArticleAnalysisInput) => Promise<ArticleA
 export async function runIngestion(
   supabase: SupabaseClient<Database>,
   analyzeArticleFn: AnalyzeArticleFn,
-  options: { maxSourcesPerRun: number; maxArticlesPerRun: number; itemsPerSource?: number },
+  options: {
+    maxSourcesPerRun: number;
+    maxArticlesPerRun: number;
+    itemsPerSource?: number;
+    onArticleInserted?: OnArticleInsertedFn;
+  },
 ): Promise<IngestionRunResult> {
-  const { maxSourcesPerRun, maxArticlesPerRun, itemsPerSource = 5 } = options;
+  const { maxSourcesPerRun, maxArticlesPerRun, itemsPerSource = 5, onArticleInserted } = options;
   const startedAt = new Date().toISOString();
 
   const { data: sources, error: sourcesError } = await supabase
@@ -45,6 +65,7 @@ export async function runIngestion(
   let articlesFetched = 0;
   let articlesPassed = 0;
   let articlesFailed = 0;
+  let deepDivesGenerated = 0;
   const errors: RunError[] = [];
 
   outer: for (const source of sources ?? []) {
@@ -94,29 +115,54 @@ export async function runIngestion(
           publishedAt: item.isoDate ?? null,
         });
 
-        const { error: insertError } = await supabase.from("articles").insert({
-          source_id: source.id,
-          category: analysis.category,
-          original_title: item.title,
-          original_body: body.slice(0, 20000),
-          original_url: item.link,
-          url_hash: urlHash,
-          original_language: source.language,
-          translated_title: analysis.translatedTitle,
-          translated_summary: analysis.translatedSummary,
-          image_url: imageUrl,
-          keywords: analysis.keywords,
-          published_at: item.isoDate ?? null,
-          fact_check_status: analysis.factCheckStatus,
-          fact_check_score: analysis.factCheckScore,
-          fact_check_notes: analysis.factCheckNotes,
-        });
+        const truncatedBody = body.slice(0, 20000);
+        const { data: inserted, error: insertError } = await supabase
+          .from("articles")
+          .insert({
+            source_id: source.id,
+            category: analysis.category,
+            original_title: item.title,
+            original_body: truncatedBody,
+            original_url: item.link,
+            url_hash: urlHash,
+            original_language: source.language,
+            translated_title: analysis.translatedTitle,
+            translated_summary: analysis.translatedSummary,
+            image_url: imageUrl,
+            keywords: analysis.keywords,
+            published_at: item.isoDate ?? null,
+            fact_check_status: analysis.factCheckStatus,
+            fact_check_score: analysis.factCheckScore,
+            fact_check_notes: analysis.factCheckNotes,
+          })
+          .select("id")
+          .single();
 
         if (insertError) {
           errors.push({ source: source.name, message: insertError.message });
           articlesFailed++;
         } else if (analysis.factCheckStatus === "pass") {
           articlesPassed++;
+
+          if (onArticleInserted && inserted) {
+            try {
+              await onArticleInserted({
+                id: inserted.id,
+                title: analysis.translatedTitle,
+                translatedSummary: analysis.translatedSummary,
+                originalBody: truncatedBody,
+                category: analysis.category,
+              });
+              deepDivesGenerated++;
+            } catch (err) {
+              // 事前生成に失敗しても収集自体は止めない(記事詳細ページ側の
+              // オンデマンド生成にフォールバックできるため)
+              errors.push({
+                source: source.name,
+                message: `詳細解説の事前生成に失敗: ${String(err)}`,
+              });
+            }
+          }
         }
       } catch (err) {
         errors.push({ source: source.name, message: String(err) });
@@ -140,6 +186,7 @@ export async function runIngestion(
     articlesFetched,
     articlesPassed,
     articlesFailed,
+    deepDivesGenerated,
     errors,
   };
 }
