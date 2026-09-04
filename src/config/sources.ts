@@ -20,6 +20,7 @@ export type SeedSource = {
     | "international"
     | "international_politics"
     | "it"
+    | "entertainment"
     | "other";
   trustWeight?: number;
 };
@@ -130,5 +131,28 @@ export const seedSources: SeedSource[] = [
     homepageUrl: "https://arstechnica.com/",
     language: "en",
     defaultCategory: "it",
+  },
+
+  // エンタメ(ゲーム・アニメ・漫画・カードゲーム等)
+  {
+    name: "4Gamer.net",
+    feedUrl: "https://www.4gamer.net/rss/index.xml",
+    homepageUrl: "https://www.4gamer.net/",
+    language: "ja",
+    defaultCategory: "entertainment",
+  },
+  {
+    name: "コミックナタリー",
+    feedUrl: "https://natalie.mu/comic/feed/news",
+    homepageUrl: "https://natalie.mu/comic",
+    language: "ja",
+    defaultCategory: "entertainment",
+  },
+  {
+    name: "映画ナタリー",
+    feedUrl: "https://natalie.mu/eiga/feed/news",
+    homepageUrl: "https://natalie.mu/eiga",
+    language: "ja",
+    defaultCategory: "entertainment",
   },
 ];

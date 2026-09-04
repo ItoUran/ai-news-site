@@ -30,6 +30,11 @@ export const CATEGORY_META: Record<
     slug: "it",
     badgeClass: "bg-emerald-700 text-white dark:bg-emerald-500",
   },
+  entertainment: {
+    label: "エンタメ",
+    slug: "entertainment",
+    badgeClass: "bg-fuchsia-700 text-white dark:bg-fuchsia-500",
+  },
   other: {
     label: "その他",
     slug: "other",
@@ -44,6 +49,7 @@ export const FIXED_CATEGORY_ORDER: ArticleCategory[] = [
   "international",
   "international_politics",
   "it",
+  "entertainment",
 ];
 
 export type FeedTabKey = "explore" | "recommended" | ArticleCategory;

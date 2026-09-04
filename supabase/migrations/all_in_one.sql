@@ -281,3 +281,9 @@ create policy "public can read radio audio files"
   to anon, authenticated
   using (bucket_id = 'radio-audio');
 
+-- ---- 0010_add_entertainment_category.sql ----
+-- 0010_add_entertainment_category.sql
+-- ビデオゲーム・アニメ・カードゲーム・漫画などのエンタメニュース向けカテゴリを追加する。
+
+alter type article_category add value if not exists 'entertainment';
+

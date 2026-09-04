@@ -13,6 +13,7 @@ export type ArticleCategory =
   | "international"
   | "international_politics"
   | "it"
+  | "entertainment"
   | "other";
 
 export type FactCheckStatus = "pending" | "pass" | "fail" | "needs_review";

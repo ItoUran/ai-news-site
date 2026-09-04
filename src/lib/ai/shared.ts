@@ -31,6 +31,7 @@ export const CATEGORY_VALUES: ArticleCategory[] = [
   "international",
   "international_politics",
   "it",
+  "entertainment",
   "other",
 ];
 
