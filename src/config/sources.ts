@@ -97,13 +97,8 @@ export const seedSources: SeedSource[] = [
     language: "ja",
     defaultCategory: "it",
   },
-  {
-    name: "Impress Watch",
-    feedUrl: "https://www.watch.impress.co.jp/data/rss/1.0/twatch/feed.rdf",
-    homepageUrl: "https://www.watch.impress.co.jp/",
-    language: "ja",
-    defaultCategory: "it",
-  },
+  // Impress Watch(旧RSS URLは404で廃止されたため削除。
+  // https://www.watch.impress.co.jp/data/rss/1.0/twatch/feed.rdf は現在利用不可)
   {
     name: "Yahoo!ニュース IT",
     feedUrl: "https://news.yahoo.co.jp/rss/topics/it.xml",

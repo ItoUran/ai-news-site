@@ -1,10 +1,15 @@
 name: Scheduled News Ingestion
 
-# 1日3回(日本時間 6:00 / 12:00 / 18:00 = UTC 21:00前日 / 3:00 / 9:00)、
-# デプロイ済みサイトの /api/cron/ingest を呼び出して記事を収集する。
+# 1日6回・4時間おき(日本時間 0/4/8/12/16/20時 = UTC 15,19,23,3,7,11時)、
+# デプロイ済みサイトの /api/cron/ingest を呼び出して記事を収集する(Gemini、Vercel上)。
 # Vercel Hobbyプランのcron制限(1日1回)を回避するため、GitHub Actionsの
 # 無料枠でスケジュール実行する。これ以外のタイミングでAI収集は一切実行されない
 # (ページ送り等での自動追加収集は行わない設計)。
+#
+# 1回あたりの処理件数はサーバーレス関数のタイムアウト対策でMAX_ARTICLES_PER_RUN=5に
+# 抑えているため、その分このワークフローの実行頻度を上げて日次の収集数を確保している
+# (ローカルのOllama収集(npm run ingest:local、タスクスケジューラで自動化)が
+# 処理量の大部分を担い、Geminiはこの控えめな頻度でも無料枠に十分収まる想定)。
 #
 # 事前準備: このリポジトリの Settings > Secrets and variables > Actions で
 #   SITE_URL   = デプロイ済みのサイトURL(例: https://your-app.vercel.app)
@@ -13,7 +18,7 @@ name: Scheduled News Ingestion
 
 on:
   schedule:
-    - cron: "0 21,3,9 * * *"
+    - cron: "0 15,19,23,3,7,11 * * *"
   workflow_dispatch: {} # GitHub Actionsの画面から手動実行したい場合用
 
 jobs:
