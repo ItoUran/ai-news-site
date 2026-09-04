@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { CATEGORY_META } from "@/types/article";
 import { categoryPlaceholderThumbnail } from "@/lib/thumbnail";
 import { LikeDislikeButtons } from "@/components/article/like-dislike-buttons";
+import { BackButton } from "@/components/article/back-button";
 
 export const revalidate = 300;
 
@@ -56,6 +57,8 @@ export default async function ArticleDetailPage({
 
   return (
     <article className="max-w-3xl mx-auto flex flex-col gap-5">
+      <BackButton />
+
       <div className="flex items-center gap-2">
         <Badge className={meta.badgeClass}>{meta.label}</Badge>
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
