@@ -18,7 +18,9 @@ AIが国内外の様々なニュースソース(英語ソース・個人ブロ�
 - Google Gemini API(`@google/genai`。翻訳・要約・カテゴリ分類・ファクトチェック。
   サーバー側Google Search Grounding併用。**無料枠のみで運用可能**)
   - GPU搭載PCがあれば、Ollama + Qwen3によるローカルLLMでの完全無料運用も選択可能(後述)
-- GitHub Actions による1日3回(朝6/昼12/夕18時)の定期収集(Vercel Cronは使用しない)
+- GitHub Actions による1日6回(4時間おき)のGemini収集(Vercel Cronは使用しない)
+  + ローカルOllamaを併用する場合、Windowsタスクスケジューラで1日8回(3時間おき)
+    追加収集することで、無料枠内で日々の記事数を最大化できる(後述)
 - 気象庁(JMA)公式JSON API(APIキー不要)
 - VOICEVOX(ローカル、オプション)によるAIラジオ音声合成
 
@@ -106,21 +108,27 @@ curl -H "Authorization: Bearer <.env.localのCRON_SECRET>" http://localhost:3000
 5. 環境変数はデプロイ後に追加すると反映に再デプロイが必要な場合があります
    (Vercelダッシュボードの Deployments > 最新デプロイの「...」> Redeploy)
 
-### 10. 定期収集の設定(1日3回・GitHub Actions)
+### 10. 定期収集の設定(1日6回・GitHub Actions)
 
 **Vercel Hobbyプラン(無料)のCronは1日1回までの制限があるため**、`vercel.json`によるVercel Cronは
-使わず、**GitHub Actionsで1日3回(朝6時・昼12時・夕方18時 JST)** `/api/cron/ingest` を呼び出す
+使わず、**GitHub Actionsで1日6回・4時間おき(JST 0/4/8/12/16/20時)** `/api/cron/ingest` を呼び出す
 構成にしています(追加費用なし)。ページ送り等ユーザー操作をきっかけにAI収集が走ることは
 一切なく、収集はこの定時実行のみに限定されています([.github/workflows/ingest.yml](.github/workflows/ingest.yml))。
+1回あたりの処理件数はVercelのサーバーレス関数タイムアウト対策で`MAX_ARTICLES_PER_RUN=5`に
+抑えているため、その分実行頻度を上げて日次の収集数を確保しています。
 
 設定手順:
 1. GitHubリポジトリの **Settings > Secrets and variables > Actions** を開く
 2. 以下のRepository secretsを追加:
    - `SITE_URL`: デプロイ済みのサイトURL(例: `https://your-app.vercel.app`)
    - `CRON_SECRET`: `.env.local`/Vercelの環境変数と同じ値
-3. これで毎日6時・12時・18時に自動実行されます。GitHub の Actions タブから手動実行(workflow_dispatch)も可能です
+3. これで4時間おきに自動実行されます。GitHub の Actions タブから手動実行(workflow_dispatch)も可能です
 
 スケジュールを変更したい場合は `.github/workflows/ingest.yml` の `cron` 式(UTC基準)を編集してください。
+
+ローカルPCでOllamaを常時使える環境がある場合は、後述の「ローカルLLM(Ollama)で完全無料運用する」の
+Windowsタスクスケジューラ設定と併用することで、Gemini側は控えめな頻度のままローカル側で
+記事数を大きく増やせます(無料枠を消費するのはGemini呼び出しのみのため)。
 
 ## ディレクトリ構成
 
@@ -174,7 +182,7 @@ scripts/seed-sources.ts       # sources.ts → Supabase への投入スクリプ
 | 気象庁API | 無料・APIキー不要 | 公式公開API |
 | AIモデル | `gemini-3.5-flash-lite`(既定) | Google AI Studioの無料枠(クレジットカード不要)で実際に動作確認済み |
 | ファクトチェックのWeb検索 | 既定でOFF(`ENABLE_WEB_SEARCH_FACTCHECK=false`) | **実機検証の結果、Google Search Groundingは無料枠のみのアカウントだと429エラーになり、Google Cloud側の課金設定(Billing有効化)が必要と判明**。クレジットカード登録なしで運用する場合はOFFのままにしてください(その場合、本文の内部矛盾・妥当性のみで判定する簡易ファクトチェックになります) |
-| 収集頻度 | 1日3回(GitHub Actions、朝6時・昼12時・夕方18時) | Vercel Hobbyのcron制限(1日1回)を回避しつつ追加費用なし。ページ送り等による追加収集は行わない |
+| 収集頻度 | 1日6回・4時間おき(GitHub Actions、JST 0/4/8/12/16/20時) | Vercel Hobbyのcron制限(1日1回)を回避しつつ追加費用なし。ページ送り等による追加収集は行わない |
 | 1回の収集件数 | Vercelでは`MAX_ARTICLES_PER_RUN=5`を推奨 | サーバーレス関数の実行時間上限(60秒)に収めるため。実機検証で10件だとタイムアウトすることを確認済み |
 
 無料枠を使い切る主なリスクは「記事数を大幅に増やす」「Cronを非常に高頻度にする」場合です。
@@ -220,6 +228,28 @@ GPU搭載PC(目安: VRAM 12GB以上)があれば、Gemini APIすら使わず**�
    ```bash
    npm run ingest:local
    ```
+
+### 自動実行(Windowsタスクスケジューラ)
+
+PCが起動している間、定期的に自動収集させたい場合は [scripts/run-local-ingest.ps1](scripts/run-local-ingest.ps1)
+をタスクスケジューラに登録します(Ollama未起動時は自動起動を試みたうえで収集を実行し、
+結果を `logs/` にUTF-8で記録します)。
+
+```powershell
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\Users\ritou\Documents\ai-news-site\scripts\run-local-ingest.ps1"'
+$trigger = New-ScheduledTaskTrigger -Once -At "00:30" -RepetitionInterval (New-TimeSpan -Hours 3) -RepetitionDuration (New-TimeSpan -Days 3650)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -MultipleInstances IgnoreNew
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName "AINewsSiteLocalIngest" -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "AI News Site: local Ollama ingestion, every 3 hours."
+```
+
+これで3時間おき(GitHub Actions/Geminiの4時間おきスケジュールとはずらしてあります)にPCが
+起動している間だけ自動収集されます。確認・削除は以下の通りです:
+```powershell
+Get-ScheduledTask -TaskName "AINewsSiteLocalIngest"       # 状態確認
+Get-ScheduledTaskInfo -TaskName "AINewsSiteLocalIngest"   # 前回実行結果・次回実行時刻
+Unregister-ScheduledTask -TaskName "AINewsSiteLocalIngest" -Confirm:$false  # 削除
+```
 
 ### Gemini版との違い
 
