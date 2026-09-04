@@ -92,6 +92,41 @@ export function truncateBody(body: string, maxChars = 4000): string {
   return body.slice(0, maxChars);
 }
 
+export type DeepDiveInput = {
+  title: string;
+  translatedSummary: string;
+  /** original_body(原文全文、無い場合は要約のみで解説する) */
+  originalBody: string | null;
+  category: ArticleCategory;
+};
+
+/**
+ * 記事詳細ページの「詳しく」ボタン用プロンプト。Ollama/Gemini共通で使う
+ * (JSON Schemaではなくプレーンテキストで返させる、要約より踏み込んだ解説)。
+ */
+export function buildDeepDivePrompt(input: DeepDiveInput): string {
+  const body = input.originalBody ? truncateBody(input.originalBody, 6000) : null;
+
+  return `あなたはニュース解説者です。以下のニュースについて、要約よりも踏み込んだ「詳しい解説」を
+日本語で書いてください。
+
+# タイトル
+${input.title}
+
+# 現在表示されている要約
+${input.translatedSummary}
+
+${body ? `# 原文本文\n${body}` : "(原文本文は取得できなかったため、上記の要約のみを情報源として解説してください)"}
+
+# 執筆方針
+- 500〜800字程度。読みやすい日本語の文章で、箇条書きは使わず段落で書くこと。
+- 単なる要約の言い換えではなく、背景・経緯・関係者にとっての意味・今後想定される展開など、
+  一歩踏み込んだ解説にすること。
+- 本文に書かれていない事実を断定的に捏造しないこと。世間の反応や今後の見通しなど推測を含める
+  場合は「〜と見られます」「〜という声もありそうです」のように、推測であることが分かる書き方にすること。
+- 見出しや前置き(「以下解説します」等)は不要。本文のみを出力すること。`;
+}
+
 export function normalizeResult(raw: Record<string, unknown>): ArticleAnalysisResult {
   const status = STATUS_VALUES.includes(raw.fact_check_status as FactCheckStatus)
     ? (raw.fact_check_status as FactCheckStatus)

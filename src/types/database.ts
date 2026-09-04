@@ -48,6 +48,8 @@ export type ArticleRow = {
   fact_check_status: FactCheckStatus;
   fact_check_score: number | null;
   fact_check_notes: string | null;
+  detailed_explanation: string | null;
+  detailed_explanation_generated_at: string | null;
   created_at: string;
   updated_at: string;
 };

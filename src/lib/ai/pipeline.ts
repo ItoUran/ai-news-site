@@ -5,8 +5,10 @@ import {
   truncateBody,
   normalizeResult,
   fallbackResult,
+  buildDeepDivePrompt,
   type ArticleAnalysisInput,
   type ArticleAnalysisResult,
+  type DeepDiveInput,
 } from "./shared";
 
 export type { ArticleAnalysisInput, ArticleAnalysisResult } from "./shared";
@@ -89,4 +91,24 @@ export async function analyzeArticle(
   }
 
   return normalizeResult(parsed);
+}
+
+/**
+ * 記事詳細ページの「詳しく」ボタン用。本番(Vercel)からはOllamaに到達できないため、
+ * こちらがフォールバックとして使われる想定(無料枠のテキスト生成のみ。web検索ツールは
+ * コスト面から使わない)。生成結果はDBにキャッシュされ、記事ごとに一度しか呼ばれない。
+ */
+export async function generateDeepDiveGemini(input: DeepDiveInput): Promise<string | null> {
+  const client = getGeminiClient();
+  try {
+    const response = await client.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: buildDeepDivePrompt(input),
+    });
+    const text = response.text?.trim();
+    return text || null;
+  } catch (err) {
+    console.error("[pipeline/gemini] generateDeepDive failed:", String(err));
+    return null;
+  }
 }

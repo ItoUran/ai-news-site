@@ -6,8 +6,10 @@ import {
   truncateBody,
   normalizeResult,
   fallbackResult,
+  buildDeepDivePrompt,
   type ArticleAnalysisInput,
   type ArticleAnalysisResult,
+  type DeepDiveInput,
 } from "./shared";
 
 export type { ArticleAnalysisInput, ArticleAnalysisResult } from "./shared";
@@ -82,4 +84,37 @@ export async function analyzeArticle(
   }
 
   return normalizeResult(parsed);
+}
+
+/**
+ * 記事詳細ページの「詳しく」ボタン用。Ollamaが起動していない/到達できない環境
+ * (Vercel本番等)では必ず失敗するので、呼び出し側でGeminiにフォールバックすること。
+ * `timeoutMs` は、OLLAMA_HOSTが実在するが応答しないホストを指している場合に
+ * ハングし続けないための安全弁(接続自体が拒否される場合は通常もっと早く失敗する)。
+ */
+export async function generateDeepDiveOllama(
+  input: DeepDiveInput,
+  timeoutMs = 20000,
+): Promise<string | null> {
+  const client = getOllamaClient();
+  const prompt = buildDeepDivePrompt(input);
+
+  try {
+    const response = await Promise.race([
+      client.chat({
+        model: OLLAMA_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        think: false,
+        stream: false,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), timeoutMs),
+      ),
+    ]);
+    const text = response.message.content?.trim();
+    return text || null;
+  } catch (err) {
+    console.error("[pipeline/ollama] generateDeepDive failed:", String(err));
+    return null;
+  }
 }

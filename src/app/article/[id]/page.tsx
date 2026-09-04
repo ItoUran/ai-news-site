@@ -11,6 +11,7 @@ import { CATEGORY_META } from "@/types/article";
 import { categoryPlaceholderThumbnail } from "@/lib/thumbnail";
 import { LikeDislikeButtons } from "@/components/article/like-dislike-buttons";
 import { BackButton } from "@/components/article/back-button";
+import { DeepDiveSection } from "@/components/article/deep-dive-section";
 
 export const revalidate = 300;
 
@@ -91,6 +92,8 @@ export default async function ArticleDetailPage({
       <p className="text-base leading-relaxed whitespace-pre-line">
         {article.translated_summary}
       </p>
+
+      <DeepDiveSection articleId={article.id} initialText={article.detailed_explanation} />
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
         <Button

@@ -9,7 +9,7 @@ export function TabNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="border-b border-border overflow-x-auto">
+    <nav className="border-b border-border overflow-x-auto overflow-y-hidden overscroll-x-contain touch-pan-x">
       <ul className="flex max-w-6xl mx-auto px-4 gap-1 min-w-max">
         {TABS.map((tab) => {
           // startsWith だと "/domestic-politics" が "/domestic" にも一致してしまうため、

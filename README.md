@@ -261,6 +261,25 @@ Unregister-ScheduledTask -TaskName "AINewsSiteLocalIngest" -Confirm:$false  # �
   (`src/lib/ingestion/runIngestion.ts`)はGemini版と共有しているため、プロバイダ間で
   ファクトチェック方針以外のロジックは統一されています
 
+## 記事の「詳しく」ボタン(AIによる深掘り解説)
+
+記事詳細ページの要約の下に「詳しく」ボタンがあります。押すとAIが要約より踏み込んだ解説
+(背景・経緯・今後の見通しなど、500〜800字程度)を生成して表示します。
+
+- 一度生成した解説は `articles.detailed_explanation` にキャッシュされ、以後は同じ記事に
+  対して再度AIを呼び出しません(クリックの度に課金・処理が走ることはありません)。
+- **なるべくOllamaを使う設計**になっています: まずローカルOllamaでの生成を試み、
+  失敗した場合のみGemini(無料枠)にフォールバックします。本番のVercelからは構造上
+  ローカルPCのOllamaに到達できない(ホームネットワークをインターネットに公開しない限り)ため、
+  デプロイ済みサイトでは実質的に常にGeminiが使われます。`npm run dev` でご自身のPC上から
+  アクセスし、かつOllamaが起動している場合はOllamaが使われます(`src/lib/ai/pipeline-ollama.ts`
+  の `generateDeepDiveOllama` / `src/lib/ai/pipeline.ts` の `generateDeepDiveGemini`)。
+- 実装: `src/app/api/articles/[id]/deep-dive/route.ts`(生成・キャッシュ)、
+  `src/components/article/deep-dive-section.tsx`(ボタンUI)。
+
+**マイグレーション**: この機能を使うには `supabase/migrations/0011_add_detailed_explanation.sql`
+の適用が必要です(未適用でもサイト自体は問題なく動作し、「詳しく」ボタンがエラー表示になるだけです)。
+
 ## AIラジオ機能(オプション)
 
 その日収集したニュースをもとに、AIが台本を書き、音声合成で読み上げる「ラジオ」タブです。
