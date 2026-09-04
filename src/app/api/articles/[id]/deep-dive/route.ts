@@ -7,12 +7,17 @@ import { generateDeepDiveGemini } from "@/lib/ai/pipeline";
 // Vercel Hobbyの上限内に収まるよう余裕を持たせる。
 export const maxDuration = 45;
 
+// このエンドポイントは未ログインでも叩ける公開APIのため、記事IDを大量に叩かれたり
+// 連打されたりしても無料枠を消費し尽くさないよう、Geminiフォールバックの呼び出し回数に
+// 1日あたりの上限を設ける(Ollama側の試行はカウントしない=失敗しても実質無料のため)。
+const DEEP_DIVE_GEMINI_DAILY_LIMIT = Number(process.env.DEEP_DIVE_GEMINI_DAILY_LIMIT ?? 50);
+
 /**
  * 記事詳細ページの「詳しく」ボタン用。
  * - 既に生成済みならDBのキャッシュをそのまま返す(再生成しない = 追加コスト無し)。
  * - 未生成の場合、まずローカルOllamaを試す(本番Vercelからは到達できず必ず失敗するが、
  *   `npm run dev` 等 OLLAMA_HOST 到達可能な環境からのアクセスでは無料で生成される)。
- * - Ollamaが使えない場合のみ、Gemini無料枠でフォールバック生成する。
+ * - Ollamaが使えない場合のみ、1日あたりの上限内でGemini無料枠にフォールバック生成する。
  * - 生成結果はDBに保存し、以降は同じ記事に対して再度AI呼び出しをしない。
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -50,7 +55,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   let text = await generateDeepDiveOllama(deepDiveInput);
   let provider = "ollama";
+
   if (!text) {
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const { count } = await supabase
+      .from("deep_dive_gemini_calls")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", startOfDay.toISOString());
+
+    if ((count ?? 0) >= DEEP_DIVE_GEMINI_DAILY_LIMIT) {
+      return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+    }
+
+    // 呼び出し前に記録する(Gemini呼び出し自体が失敗してもカウントは消費する。
+    // 失敗する記事への連打で無限に再試行され続けることを防ぐため)。
+    await supabase.from("deep_dive_gemini_calls").insert({});
+
     text = await generateDeepDiveGemini(deepDiveInput);
     provider = "gemini";
   }

@@ -102,6 +102,12 @@ export type RadioEpisodeRow = {
   created_at: string;
 };
 
+/** /api/articles/[id]/deep-dive のGeminiフォールバック呼び出し回数の記録(1日あたりの上限チェック用) */
+export type DeepDiveGeminiCallRow = {
+  id: number;
+  created_at: string;
+};
+
 /** Supabase JSクライアントの Database ジェネリクスに渡す最小限の型 */
 export type Database = {
   public: {
@@ -140,6 +146,12 @@ export type Database = {
         Row: RadioEpisodeRow;
         Insert: Partial<RadioEpisodeRow>;
         Update: Partial<RadioEpisodeRow>;
+        Relationships: [];
+      };
+      deep_dive_gemini_calls: {
+        Row: DeepDiveGeminiCallRow;
+        Insert: Partial<DeepDiveGeminiCallRow>;
+        Update: Partial<DeepDiveGeminiCallRow>;
         Relationships: [];
       };
     };

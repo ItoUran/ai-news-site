@@ -27,6 +27,10 @@ import { synthesizeScript, isVoicevoxRunning } from "../src/lib/tts/voicevox";
 // 差分に近い8時間に短縮(24時間のままだと3回とも似た内容になってしまうため)。
 const HOURS_LOOKBACK = Number(process.env.RADIO_HOURS_LOOKBACK ?? 8);
 const MAX_ARTICLES = Number(process.env.RADIO_MAX_ARTICLES ?? 15);
+// 1エピソードあたり数MBのWAVファイルが1日3回蓄積し続けると、Supabaseの無料枠の
+// ストレージ容量をいずれ圧迫する(=有料化を迫られる)ため、一定日数より古いエピソードは
+// 生成のたびに自動で削除する(音声ファイル・DB行の両方)。
+const RETENTION_DAYS = Number(process.env.RADIO_RETENTION_DAYS ?? 14);
 
 async function main() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -108,6 +112,51 @@ async function main() {
 
   console.log(`完了: 「${title}」を公開しました。`);
   console.log(`音声URL: ${publicUrlData.publicUrl}`);
+
+  await cleanupOldEpisodes(supabase);
+}
+
+/** RETENTION_DAYS より古いエピソードを、音声ファイル・DB行ともに削除する(ストレージ容量対策) */
+async function cleanupOldEpisodes(supabase: ReturnType<typeof createClient<Database>>) {
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { data: oldEpisodes, error } = await supabase
+    .from("radio_episodes")
+    .select("id, audio_url")
+    .lt("published_at", cutoff);
+
+  if (error) {
+    console.error("古いエピソードの取得に失敗しました(削除はスキップ):", error);
+    return;
+  }
+  if (!oldEpisodes || oldEpisodes.length === 0) return;
+
+  const fileNames = oldEpisodes
+    .map((e) => e.audio_url.split("/").pop())
+    .filter((f): f is string => !!f);
+
+  if (fileNames.length > 0) {
+    const { error: removeError } = await supabase.storage.from("radio-audio").remove(fileNames);
+    if (removeError) {
+      console.error("古い音声ファイルの削除に失敗しました:", removeError);
+      // 音声削除に失敗した場合はDB行も残す(孤立したURL参照を防ぐため)
+      return;
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("radio_episodes")
+    .delete()
+    .in(
+      "id",
+      oldEpisodes.map((e) => e.id),
+    );
+
+  if (deleteError) {
+    console.error("古いエピソードのDB削除に失敗しました:", deleteError);
+    return;
+  }
+
+  console.log(`${oldEpisodes.length}件の古いエピソード(${RETENTION_DAYS}日以上前)を削除しました。`);
 }
 
 main();

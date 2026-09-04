@@ -63,9 +63,9 @@ export async function Header() {
           href="/radio"
           aria-label="AIニュースラジオを開く"
           title="AIニュースラジオ"
-          className="group inline-flex size-12 sm:size-14 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105"
+          className="inline-flex size-10 sm:size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
         >
-          <Radio className="size-5 sm:size-6 transition-transform group-hover:rotate-12" />
+          <Radio className="size-4 sm:size-5" />
         </Link>
       </div>
 

@@ -361,10 +361,19 @@ Unregister-ScheduledTask -TaskName "AINewsSiteRadio" -Confirm:$false  # 削除
 - **セキュリティヘッダー**: `X-Frame-Options`(クリックジャッキング対策)、`X-Content-Type-Options`、
   `Referrer-Policy`、`Permissions-Policy`を全ページに付与([next.config.ts](next.config.ts))
 - **`/api/cron/ingest`の保護**: `CRON_SECRET`(強固なランダム値)によるBearer認証。実機で
-  誤ったシークレットが401で拒否されることを確認済み
+  誤ったシークレットが401で拒否されることを確認済み。**フェイルクローズ設計**: `CRON_SECRET`が
+  万一未設定の場合でも(以前は誤って誰でも叩ける状態になっていたが)必ず401を返すよう修正済み
+- **`/api/articles/[id]/deep-dive`のレート制限**: 未ログインでも叩ける公開APIのため、
+  Ollamaが使えない環境でのGeminiフォールバック呼び出しに1日あたりの上限(既定50回、
+  `DEEP_DIVE_GEMINI_DAILY_LIMIT`)を設け、`deep_dive_gemini_calls` テーブルで記録・判定する。
+  上限超過時は423ではなく429を返し、無料枠を連打・大量記事IDアクセスで消費し尽くされることを防ぐ
+  (キャッシュ済み記事の再取得や、到達可能な場合のOllama呼び出し自体はこの上限に含まれない)
 - **依存パッケージ**: `npm audit` で脆弱性0件を確認済み(定期的な再実行を推奨)
 - **XSS対策**: `dangerouslySetInnerHTML`等の危険なパターンは未使用。記事本文はAI要約のみ表示
   (元記事全文は保存するがUIには出さない)
+- **ラジオ音声のストレージ容量対策**: 1日3回・数MB/回の音声ファイルが無制限に蓄積すると
+  Supabaseの無料ストレージ枠を圧迫するため、`scripts/generate-radio.ts` が生成のたびに
+  既定14日(`RADIO_RETENTION_DAYS`)より古いエピソードの音声ファイル・DB行を自動削除する
 
 **運用上ご確認いただきたい点**:
 - Supabaseの Authentication > Providers > Email で「Confirm email」を有効にすることを推奨します

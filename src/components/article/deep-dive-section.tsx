@@ -31,14 +31,16 @@ export function DeepDiveSection({
     setError(null);
     try {
       const res = await fetch(`/api/articles/${articleId}/deep-dive`, { method: "POST" });
+      if (res.status === 429) {
+        setError("本日の生成上限に達しました。日付が変わってから再度お試しください。");
+        return;
+      }
       if (!res.ok) throw new Error(`status ${res.status}`);
       const data = (await res.json()) as { detailedExplanation: string };
       setText(data.detailedExplanation);
       setExpanded(true);
     } catch {
-      setError(
-        "詳細解説の生成に失敗しました。しばらくしてから再度お試しください。",
-      );
+      setError("詳細解説の生成に失敗しました。しばらくしてから再度お試しください。");
     } finally {
       setLoading(false);
     }
