@@ -51,7 +51,7 @@ export default async function ExplorePage() {
       </div>
       <ArticleGrid
         articles={articles}
-        showLikeDislike
+        showReactions
         emptyMessage="表示できる記事がまだありません。しばらくしてから再度お試しください。"
       />
     </div>

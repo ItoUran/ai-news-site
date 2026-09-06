@@ -99,6 +99,22 @@ export async function getRecentArticles(days = 14, limit = 500): Promise<Article
   return (data ?? []) as unknown as ArticleWithSource[];
 }
 
+/** ログイン中ユーザーがブックマークした記事一覧(新しくブックマークした順) */
+export async function getMyBookmarkedArticles(userId: string): Promise<ArticleWithSource[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("user_article_interactions")
+    .select(`updated_at, article:articles(${ARTICLE_SELECT})`)
+    .eq("user_id", userId)
+    .eq("bookmarked", true)
+    .order("updated_at", { ascending: false });
+
+  if (error) return logAndEmpty("getMyBookmarkedArticles", error);
+
+  const rows = (data ?? []) as unknown as { article: ArticleWithSource | null }[];
+  return rows.map((row) => row.article).filter((a): a is ArticleWithSource => !!a);
+}
+
 /** 直近7日の全体人気記事(未ログインユーザーのおすすめフォールバック用) */
 export async function getTrendingArticles(limit = 20): Promise<ArticleWithSource[]> {
   const supabase = await createClient();

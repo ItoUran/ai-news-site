@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { UserArticleInteractionRow } from "@/types/database";
 
-type InteractionAction = "like" | "unlike" | "dislike" | "undislike" | "view";
+type InteractionAction =
+  | "like"
+  | "unlike"
+  | "dislike"
+  | "undislike"
+  | "view"
+  | "bookmark"
+  | "unbookmark";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -45,6 +52,12 @@ export async function POST(request: Request) {
       break;
     case "undislike":
       patch.disliked = false;
+      break;
+    case "bookmark":
+      patch.bookmarked = true;
+      break;
+    case "unbookmark":
+      patch.bookmarked = false;
       break;
     case "view":
       patch.view_count = (existing?.view_count ?? 0) + 1;

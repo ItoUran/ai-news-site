@@ -2,24 +2,30 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type ReactionState = "none" | "liked" | "disliked";
 
-export function LikeDislikeButtons({
+/** 気に入った/気に入らない/ブックマークをまとめた反応ボタン群(いずれもログイン必須)。 */
+export function ArticleReactions({
   articleId,
   initialState = "none",
+  initialBookmarked = false,
 }: {
   articleId: string;
   initialState?: ReactionState;
+  initialBookmarked?: boolean;
 }) {
   const [state, setState] = useState<ReactionState>(initialState);
+  const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
-  async function sendAction(action: "like" | "unlike" | "dislike" | "undislike") {
+  async function sendAction(
+    action: "like" | "unlike" | "dislike" | "undislike" | "bookmark" | "unbookmark",
+  ) {
     const res = await fetch("/api/interactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -53,6 +59,15 @@ export function LikeDislikeButtons({
     });
   }
 
+  function handleBookmark() {
+    const next = !bookmarked;
+    setBookmarked(next);
+    startTransition(async () => {
+      const ok = await sendAction(next ? "bookmark" : "unbookmark");
+      if (!ok) setBookmarked(!next);
+    });
+  }
+
   return (
     <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
       <Button
@@ -81,6 +96,22 @@ export function LikeDislikeButtons({
       >
         <ThumbsDown className="size-3.5" />
         気に入らない
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon-sm"
+        disabled={pending}
+        onClick={handleBookmark}
+        aria-pressed={bookmarked}
+        aria-label={bookmarked ? "ブックマークを解除" : "ブックマークに追加"}
+        title={bookmarked ? "ブックマークを解除" : "ブックマークに追加"}
+        className={cn(
+          bookmarked &&
+            "border-amber-500! text-amber-500! bg-amber-500/10! dark:border-amber-400! dark:text-amber-400!",
+        )}
+      >
+        <Bookmark className={cn("size-3.5", bookmarked && "fill-current")} />
       </Button>
     </div>
   );

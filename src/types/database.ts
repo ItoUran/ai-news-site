@@ -74,6 +74,7 @@ export type UserArticleInteractionRow = {
   article_id: string;
   liked: boolean;
   disliked: boolean;
+  bookmarked: boolean;
   view_count: number;
   first_viewed_at: string | null;
   last_viewed_at: string | null;

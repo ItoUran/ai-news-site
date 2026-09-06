@@ -3,11 +3,14 @@ import type { ArticleWithSource } from "@/types/database";
 
 export function ArticleGrid({
   articles,
-  showLikeDislike = false,
+  showReactions = false,
+  initialBookmarked = false,
   emptyMessage = "まだ記事がありません。収集パイプラインの実行後に表示されます。",
 }: {
   articles: ArticleWithSource[];
-  showLikeDislike?: boolean;
+  showReactions?: boolean;
+  /** 一覧内の全記事に共通の初期ブックマーク状態(例: ブックマーク一覧ページでは全件true) */
+  initialBookmarked?: boolean;
   emptyMessage?: string;
 }) {
   if (articles.length === 0) {
@@ -21,7 +24,12 @@ export function ArticleGrid({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
       {articles.map((article) => (
-        <ArticleCard key={article.id} article={article} showLikeDislike={showLikeDislike} />
+        <ArticleCard
+          key={article.id}
+          article={article}
+          showReactions={showReactions}
+          initialBookmarked={initialBookmarked}
+        />
       ))}
     </div>
   );

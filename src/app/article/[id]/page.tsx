@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CATEGORY_META } from "@/types/article";
 import { categoryPlaceholderThumbnail } from "@/lib/thumbnail";
-import { LikeDislikeButtons } from "@/components/article/like-dislike-buttons";
+import { ArticleReactions } from "@/components/article/article-reactions";
 import { BackButton } from "@/components/article/back-button";
 import { DeepDiveSection } from "@/components/article/deep-dive-section";
 
@@ -29,19 +29,27 @@ export default async function ArticleDetailPage({
     ? formatDistanceToNow(new Date(article.published_at), { addSuffix: true, locale: ja })
     : null;
 
-  // ログイン中なら閲覧を記録する(おすすめ/探索スコアリングの入力)
+  // ログイン中なら閲覧を記録する(おすすめ/探索スコアリングの入力)。
+  // ついでに現在のいいね/よくないね/ブックマーク状態も取得し、ボタンの初期表示に反映する。
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  let initialReactionState: "none" | "liked" | "disliked" = "none";
+  let initialBookmarked = false;
+
   if (user) {
     const { data: existing } = await supabase
       .from("user_article_interactions")
-      .select("view_count, first_viewed_at")
+      .select("view_count, first_viewed_at, liked, disliked, bookmarked")
       .eq("user_id", user.id)
       .eq("article_id", article.id)
       .maybeSingle();
+
+    if (existing?.liked) initialReactionState = "liked";
+    else if (existing?.disliked) initialReactionState = "disliked";
+    initialBookmarked = existing?.bookmarked ?? false;
 
     const now = new Date().toISOString();
     await supabase.from("user_article_interactions").upsert(
@@ -105,7 +113,11 @@ export default async function ArticleDetailPage({
             </Link>
           }
         />
-        <LikeDislikeButtons articleId={article.id} />
+        <ArticleReactions
+          articleId={article.id}
+          initialState={initialReactionState}
+          initialBookmarked={initialBookmarked}
+        />
       </div>
     </article>
   );

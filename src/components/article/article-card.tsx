@@ -5,14 +5,16 @@ import { Badge } from "@/components/ui/badge";
 import { CATEGORY_META } from "@/types/article";
 import type { ArticleWithSource } from "@/types/database";
 import { categoryPlaceholderThumbnail } from "@/lib/thumbnail";
-import { LikeDislikeButtons } from "./like-dislike-buttons";
+import { ArticleReactions } from "./article-reactions";
 
 export function ArticleCard({
   article,
-  showLikeDislike = false,
+  showReactions = false,
+  initialBookmarked = false,
 }: {
   article: ArticleWithSource;
-  showLikeDislike?: boolean;
+  showReactions?: boolean;
+  initialBookmarked?: boolean;
 }) {
   const meta = CATEGORY_META[article.category];
   const relativeTime = article.published_at
@@ -53,9 +55,9 @@ export function ArticleCard({
         </div>
       </Link>
 
-      {showLikeDislike && (
+      {showReactions && (
         <div className="px-4 pb-4">
-          <LikeDislikeButtons articleId={article.id} />
+          <ArticleReactions articleId={article.id} initialBookmarked={initialBookmarked} />
         </div>
       )}
     </div>

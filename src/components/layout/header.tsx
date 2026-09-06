@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Radio } from "lucide-react";
+import { Radio, Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { TabNav } from "./tab-nav";
 import { ThemeToggle } from "./theme-toggle";
@@ -59,14 +59,26 @@ export async function Header() {
           </p>
         </Link>
 
-        <Link
-          href="/radio"
-          aria-label="AIニュースラジオを開く"
-          title="AIニュースラジオ"
-          className="inline-flex size-10 sm:size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
-        >
-          <Radio className="size-4 sm:size-5" />
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          {user && (
+            <Link
+              href="/bookmarks"
+              aria-label="ブックマークを見る"
+              title="ブックマーク"
+              className="inline-flex size-10 sm:size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
+            >
+              <Star className="size-4 sm:size-5" />
+            </Link>
+          )}
+          <Link
+            href="/radio"
+            aria-label="AIニュースラジオを開く"
+            title="AIニュースラジオ"
+            className="inline-flex size-10 sm:size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
+          >
+            <Radio className="size-4 sm:size-5" />
+          </Link>
+        </div>
       </div>
 
       <TabNav />
