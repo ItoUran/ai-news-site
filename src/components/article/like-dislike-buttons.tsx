@@ -74,7 +74,10 @@ export function LikeDislikeButtons({
         disabled={pending}
         onClick={handleDislike}
         aria-pressed={state === "disliked"}
-        className={cn(state === "disliked" && "border-muted-foreground bg-muted")}
+        className={cn(
+          state === "disliked" &&
+            "border-blue-600! text-blue-600! bg-blue-600/10! dark:border-blue-500! dark:text-blue-500!",
+        )}
       >
         <ThumbsDown className="size-3.5" />
         気に入らない
