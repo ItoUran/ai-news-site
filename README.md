@@ -349,6 +349,126 @@ Unregister-ScheduledTask -TaskName "AINewsSiteRadio" -Confirm:$false  # 削除
 - `RADIO_HOURS_LOOKBACK`(既定8時間) / `RADIO_MAX_ARTICLES`: 台本に使う記事の対象期間・件数。
   1日3回更新なので、24時間のままだと3回とも似た内容になりやすい点に注意してください
 
+## 外部サーバーで常時稼働させる(オプション、PC不要化)
+
+ここまでのローカルLLM運用(記事収集・ラジオ生成)は、あなたのWindows PCが起動していて
+Ollama/VOICEVOXが動いている時にしか実行されません。PCの電源が入っていない間は収集が
+止まってしまうため、**24時間起動しっぱなしの外部サーバーに移す**ことで、PCに依存せず
+常に最新の状態を保てるようにできます。サイト本体(Vercel)・DB(Supabase)はこれまで通りで、
+変わるのはOllama/VOICEVOXの実行場所だけです。
+
+### サーバーの選び方
+
+**おすすめ: [Oracle Cloud Infrastructure(OCI)の Always Free 枠](https://www.oracle.com/cloud/free/)**
+の Ampere A1(ARM)インスタンス。期間限定のトライアルではなく、**無料枠のまま永続的に**
+使えるのが最大のメリットです。
+
+- 2026年6月の仕様変更後は **2 OCPU / 12GB RAM**(以前は4 OCPU/24GB)。qwen3:8b(Q4量子化、
+  常駐時約5〜6GB)+ VOICEVOX + Node.js を動かすには十分な余裕があります(CPU推論のため
+  1記事あたりの処理速度はRTX 3060での実績より遅くなりますが、3時間おきの実行間隔には
+  収まる見込みです)
+- ARM(arm64)ですが、Ollama・VOICEVOX ENGINEともにLinux arm64版が公式に提供されており
+  問題なく動作します
+- インスタンス作成時に「Out of host capacity」で弾かれることがありますが、**東京・大阪
+  リージョンは比較的空きが見つかりやすい**と報告されています(米国リージョンほど混雑しない)
+- サインアップにクレジットカードの登録が必要ですが、無料枠の範囲内であれば課金は発生しません
+
+このアプリは**受信ポートを一切公開する必要がありません**(Supabaseへ発信するだけの
+ワーカーのため)。管理用のSSH以外は外部に開放しないでください。
+
+もしOracleの無料枠が確保できない、または管理の手間を減らしたい場合は、
+[Hetzner](https://www.hetzner.com/cloud/) 等の格安VPS(月数百〜千円程度、x86なので
+VOICEVOXも確実に動作)を契約する方法もあります(この場合は無料運用ではなくなる点にご注意ください)。
+
+### セットアップ手順(Ubuntu 22.04/24.04を想定)
+
+1. **サーバー作成**: OCIコンソールで Compute > Instances > Create Instance。Shapeで
+   「Ampere」→ VM.Standard.A1.Flex を選択し、OCPU/メモリを無料枠の上限(2 OCPU/12GB)に
+   設定。イメージはUbuntu。作成後、SSH鍵でログインできることを確認してください
+2. **基本パッケージ**:
+   ```bash
+   sudo apt update && sudo apt install -y curl git p7zip-full build-essential
+   ```
+3. **Node.js(LTS)**:
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+   sudo apt install -y nodejs
+   ```
+4. **Ollama**(公式インストールスクリプトが systemd サービスとして自動登録・自動起動します):
+   ```bash
+   curl -fsSL https://ollama.com/install.sh | sh
+   ollama pull qwen3:8b
+   systemctl status ollama   # active (running) になっていることを確認
+   ```
+5. **VOICEVOX ENGINE**([Releases](https://github.com/VOICEVOX/voicevox_engine/releases/latest)
+   のLinux CPU arm64版。`gh` CLI([インストール手順](https://cli.github.com/))を使うと
+   分割ファイルもまとめてダウンロードできます):
+   ```bash
+   mkdir -p ~/voicevox_engine && cd ~/voicevox_engine
+   gh release download --repo VOICEVOX/voicevox_engine \
+     --pattern "voicevox_engine-linux-cpu-arm64-*.7z.*"
+   7z x voicevox_engine-linux-cpu-arm64-*.7z.001
+   chmod +x run
+   ```
+   systemdサービス化(`/etc/systemd/system/voicevox.service`。ホストは`127.0.0.1`に
+   バインドし、外部に公開しないこと):
+   ```ini
+   [Unit]
+   Description=VOICEVOX Engine
+   After=network.target
+
+   [Service]
+   Type=simple
+   ExecStart=/home/ubuntu/voicevox_engine/run --host 127.0.0.1 --port 50021
+   WorkingDirectory=/home/ubuntu/voicevox_engine
+   Restart=always
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+   ```bash
+   sudo systemctl enable --now voicevox
+   systemctl status voicevox   # active (running) になっていることを確認
+   ```
+6. **リポジトリの取得と依存関係**:
+   ```bash
+   git clone https://github.com/<あなたのGitHubユーザー名>/ai-news-site.git
+   cd ai-news-site
+   npm install
+   chmod +x scripts/*.sh
+   ```
+7. **`.env.local` を作成**(`.env.local.example` を参考に、`NEXT_PUBLIC_SUPABASE_URL` /
+   `SUPABASE_SERVICE_ROLE_KEY` / `OLLAMA_MODEL` / `VOICEVOX_HOST=http://127.0.0.1:50021`
+   等を設定。**このファイルには強い権限のservice_roleキーが入るため、`chmod 600 .env.local`
+   でファイル権限を絞ってください**)
+8. **動作確認**(実際に1回ずつ手動実行):
+   ```bash
+   npm run ingest:local
+   npm run radio:generate
+   ```
+9. **cron登録**(`crontab -e`):
+   ```cron
+   # 記事収集: 3時間おき
+   0 */3 * * * /home/ubuntu/ai-news-site/scripts/run-local-ingest.sh
+   # ラジオ生成: 6時/12時/18時
+   0 6,12,18 * * * /home/ubuntu/ai-news-site/scripts/run-radio-generate.sh
+   ```
+
+### 移行後にやること
+
+- Windows PC側で登録した `AINewsSiteLocalIngest` / `AINewsSiteRadio` タスクは、外部サーバーで
+  正常に動作していることを確認できたら停止・削除してください(残しておくと二重に処理が走り、
+  電力・PCリソースの無駄になります。DB側は記事のURL重複排除があるため、記事が重複登録される
+  実害はありません)。
+  ```powershell
+  Unregister-ScheduledTask -TaskName "AINewsSiteLocalIngest" -Confirm:$false
+  Unregister-ScheduledTask -TaskName "AINewsSiteRadio" -Confirm:$false
+  ```
+- サーバーのOS・パッケージのセキュリティアップデートは自動化しておくことを推奨します
+  (`sudo apt install unattended-upgrades`)
+- SSHはパスワード認証を無効化し、鍵認証のみにしてください
+  (`/etc/ssh/sshd_config` の `PasswordAuthentication no`)
+
 ## セキュリティ
 
 実施済みの対策:
