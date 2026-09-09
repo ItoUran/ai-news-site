@@ -1,5 +1,6 @@
 import type { NormalizedForecast } from "@/types/weather";
 import { getJmaWeatherIconUrl } from "@/config/jma-weather-icons";
+import { WeatherTimeline } from "./weather-timeline";
 
 export function ForecastPanel({ forecast }: { forecast: NormalizedForecast }) {
   return (
@@ -13,6 +14,8 @@ export function ForecastPanel({ forecast }: { forecast: NormalizedForecast }) {
           発表: {forecast.publishingOffice} ({formatDate(forecast.reportDatetime)})
         </p>
       </div>
+
+      <WeatherTimeline points={forecast.timeline} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {forecast.days.map((day) => (
@@ -52,9 +55,13 @@ export function ForecastPanel({ forecast }: { forecast: NormalizedForecast }) {
   );
 }
 
+// 本番(Vercel)はサーバーのタイムゾーンがUTCのため、timeZoneを明示しないと
+// JST 0時始まりの日付が日本時間より1日ずれて表示されてしまう(ローカル開発機は
+// 既にJSTのため気づきにくい)。日付を扱う箇所は必ず timeZone: "Asia/Tokyo" を指定する。
 function formatDate(iso: string): string {
   if (!iso) return "";
   return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
     month: "long",
     day: "numeric",
     hour: "numeric",
@@ -64,7 +71,10 @@ function formatDate(iso: string): string {
 
 function formatShortDate(iso: string): string {
   if (!iso) return "";
-  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short" }).format(
-    new Date(iso),
-  );
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).format(new Date(iso));
 }

@@ -4,12 +4,16 @@ import type { RadioEpisodeRow } from "@/types/database";
 
 export const revalidate = 300;
 
+// 本番(Vercel)はサーバーのタイムゾーンがUTCのため、timeZoneを明示しないと
+// JST基準の日付が1日ずれる(ローカル開発機は既にJSTのため気づきにくい)。
 const dayKeyFormat = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
 });
 const dateLabelFormat = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
   month: "long",
   day: "numeric",
   weekday: "short",

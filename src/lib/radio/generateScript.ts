@@ -73,7 +73,10 @@ export async function generateRadioScript(
   now: Date,
 ): Promise<RadioScriptResult> {
   const client = getOllamaClient();
+  // このスクリプトはローカルPC(常にJST)でのみ実行されるため実害はないが、
+  // 念のため他箇所と同様に明示しておく。
   const dateLabel = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
     year: "numeric",
     month: "long",
     day: "numeric",

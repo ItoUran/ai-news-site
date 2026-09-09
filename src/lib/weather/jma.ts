@@ -4,6 +4,7 @@ import type {
   JmaTimeSeries,
   NormalizedForecast,
   DailyForecast,
+  TimelinePoint,
 } from "@/types/weather";
 import { findJmaArea, DEFAULT_AREA_CODE } from "@/config/jma-areas";
 
@@ -31,6 +32,7 @@ export async function getNormalizedForecast(
     : null;
 
   const days = normalizeDays(forecastReports);
+  const timeline = buildTimeline(forecastReports[0]);
   const areaName = findJmaArea(code)?.name ?? code;
 
   return {
@@ -40,6 +42,7 @@ export async function getNormalizedForecast(
     reportDatetime: forecastReports[0]?.reportDatetime ?? "",
     overviewText: overview?.text ?? "",
     days,
+    timeline,
   };
 }
 
@@ -115,4 +118,43 @@ function buildTodayFromShortTerm(shortTerm: JmaForecastReport | undefined): Dail
     tempMin: null,
     tempMax: null,
   };
+}
+
+/**
+ * 今日〜明日にかけての天気の移り変わりタイムライン。
+ * JMAの予報APIは天気コード(晴/曇/雨等)自体は「今日・明日・明後日」の3点しか
+ * 持たない(1時間単位の天気コードは提供されない)ため、真の意味での1時間ごとの
+ * アイコン切り替えは実現できない。その代わり、より細かい単位(3〜6時間おき)で
+ * 提供される短期予報の降水確率の時系列に、各時刻が属する日の天気コードを
+ * 組み合わせることで、「今日の午後は雨、夜には曇りに変わり、明日は…」といった
+ * 移り変わりが分かるタイムラインを作る。
+ */
+function buildTimeline(shortTerm: JmaForecastReport | undefined): TimelinePoint[] {
+  if (!shortTerm) return [];
+
+  const weatherSeries = findSeries(shortTerm, (ts) => ts.areas.some((a) => Array.isArray(a.weatherCodes)));
+  const popSeries = findSeries(shortTerm, (ts) => ts.areas.some((a) => Array.isArray(a.pops)));
+
+  const weatherArea = weatherSeries?.areas[0];
+  const popArea = popSeries?.areas[0];
+  if (!popSeries || !popArea?.pops) return [];
+
+  const weatherPoints = (weatherSeries?.timeDefines ?? []).map((date, i) => ({
+    time: new Date(date).getTime(),
+    code: weatherArea?.weatherCodes?.[i] ?? null,
+  }));
+
+  return popSeries.timeDefines.map((date, i) => {
+    const t = new Date(date).getTime();
+    // この時刻以前で最も新しい天気コードを、その時間帯の天気として採用する
+    let code: string | null = null;
+    for (const wp of weatherPoints) {
+      if (wp.time <= t) code = wp.code;
+    }
+    return {
+      time: date,
+      pop: popArea.pops?.[i] ? Number(popArea.pops[i]) : null,
+      weatherCode: code,
+    };
+  });
 }

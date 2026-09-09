@@ -41,6 +41,13 @@ export type DailyForecast = {
   tempMax: number | null;
 };
 
+/** 今日〜明日にかけての、短期予報由来の6時間刻みタイムライン(降水確率+その時点の天気コード) */
+export type TimelinePoint = {
+  time: string; // ISO
+  pop: number | null;
+  weatherCode: string | null;
+};
+
 export type NormalizedForecast = {
   areaCode: string;
   areaName: string;
@@ -48,4 +55,5 @@ export type NormalizedForecast = {
   reportDatetime: string;
   overviewText: string;
   days: DailyForecast[];
+  timeline: TimelinePoint[];
 };

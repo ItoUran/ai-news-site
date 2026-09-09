@@ -24,7 +24,10 @@ export async function Header() {
     avatarUrl = profile?.avatar_url ?? null;
   }
 
+  // 本番(Vercel)はサーバーのタイムゾーンがUTCのため、timeZoneを明示しないと
+  // JST 0〜9時の間、日付が1日前として表示されてしまう。
   const today = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
     year: "numeric",
     month: "long",
     day: "numeric",
