@@ -1,6 +1,7 @@
 import type {
   JmaForecastReport,
   JmaOverviewForecast,
+  JmaTimeSeries,
   NormalizedForecast,
   DailyForecast,
 } from "@/types/weather";
@@ -42,49 +43,76 @@ export async function getNormalizedForecast(
   };
 }
 
+function findSeries(
+  report: JmaForecastReport | undefined,
+  predicate: (ts: JmaTimeSeries) => boolean,
+) {
+  return report?.timeSeries.find(predicate);
+}
+
 /**
- * JMAのレスポンスは「短期(時系列の細かいデータ)」と「週間(1日単位)」の
- * 複数レポートが配列で返る。ここでは週間側の pops/temps/weatherCodes を使い、
- * 直近7日分の日別予報に正規化する。
+ * JMAのレスポンスは複数のレポートが配列で返る。典型的には
+ * reports[0] = 短期予報(今日・明日・明後日の詳細、時間帯単位の降水確率つき)
+ * reports[1] = 週間予報(1日単位、7日分だが「明日」から始まり「今日」を含まない)
+ * という構造になっている。週間側だけを使うと「今日」が抜け落ちてしまうため、
+ * 短期予報から「今日」の天気コード・降水確率を作って先頭に補う。
+ * (今日分の最高・最低気温は短期予報側の構造が地点別の生値でありtempsMin/tempsMaxの
+ * ような明確な最高・最低の形になっていないため、誤った値を出すより「-」表示の方が
+ * 安全と判断し、あえて含めない)
  */
 function normalizeDays(reports: JmaForecastReport[]): DailyForecast[] {
-  // reports[0] = 短期(今日明日の詳細), reports[1] = 週間(1週間分) というのが典型的な構造
+  const shortTerm = reports[0];
   const weekly = reports[1] ?? reports[0];
   if (!weekly) return [];
 
-  const weatherSeries = weekly.timeSeries.find((ts) =>
-    ts.areas.some((a) => Array.isArray(a.weatherCodes)),
-  );
-  const popSeries = weekly.timeSeries.find((ts) => ts.areas.some((a) => Array.isArray(a.pops)));
-  const tempSeries = weekly.timeSeries.find((ts) =>
-    ts.areas.some((a) => Array.isArray(a.tempsMin) || Array.isArray(a.tempsMax)),
+  const weatherSeries = findSeries(weekly, (ts) => ts.areas.some((a) => Array.isArray(a.weatherCodes)));
+  const tempSeries = findSeries(
+    weekly,
+    (ts) => ts.areas.some((a) => Array.isArray(a.tempsMin) || Array.isArray(a.tempsMax)),
   );
 
   const weatherArea = weatherSeries?.areas[0];
-  const popArea = popSeries?.areas[0];
   const tempArea = tempSeries?.areas[0];
+  const timeDefines = weatherSeries?.timeDefines ?? [];
 
-  const timeDefines = weatherSeries?.timeDefines ?? popSeries?.timeDefines ?? [];
-
-  return timeDefines.map((date, i) => ({
+  const weeklyDays: DailyForecast[] = timeDefines.map((date, i) => ({
     date,
     weatherCode: weatherArea?.weatherCodes?.[i] ?? null,
     weatherText: weatherArea?.weathers?.[i]?.trim() ?? null,
-    pop: popArea?.pops?.[i] ? Number(popArea.pops[i]) : null,
+    pop: weatherArea?.pops?.[i] ? Number(weatherArea.pops[i]) : null,
     tempMin: tempArea?.tempsMin?.[i] ? Number(tempArea.tempsMin[i]) : null,
     tempMax: tempArea?.tempsMax?.[i] ? Number(tempArea.tempsMax[i]) : null,
   }));
+
+  const todayDay = buildTodayFromShortTerm(shortTerm);
+  if (!todayDay) return weeklyDays;
+
+  const todayKey = todayDay.date.slice(0, 10);
+  const restDays = weeklyDays.filter((d) => d.date.slice(0, 10) !== todayKey);
+  return [todayDay, ...restDays];
 }
 
-/** JMAの天気コード(3桁)を簡易的な絵文字にマッピング(代表的なもののみ) */
-export function weatherCodeToEmoji(code: string | null): string {
-  if (!code) return "❓";
-  const c = code.padStart(3, "0");
-  if (c.startsWith("1")) return "☀️"; // 晴
-  if (c.startsWith("2")) return "☁️"; // 曇
-  if (c.startsWith("3")) return "☁️";
-  if (c.startsWith("4") || c.startsWith("5")) return "🌧️"; // 雨
-  if (c.startsWith("6") || c.startsWith("7")) return "❄️"; // 雪
-  if (c.startsWith("8")) return "⛈️"; // 雷
-  return "🌤️";
+function buildTodayFromShortTerm(shortTerm: JmaForecastReport | undefined): DailyForecast | null {
+  if (!shortTerm) return null;
+
+  const weatherSeries = findSeries(shortTerm, (ts) => ts.areas.some((a) => Array.isArray(a.weatherCodes)));
+  const popSeries = findSeries(shortTerm, (ts) => ts.areas.some((a) => Array.isArray(a.pops)));
+
+  const weatherArea = weatherSeries?.areas[0];
+  const popArea = popSeries?.areas[0];
+  const todayDate = weatherSeries?.timeDefines?.[0];
+  const todayCode = weatherArea?.weatherCodes?.[0];
+
+  if (!todayDate || !todayCode) return null;
+
+  return {
+    date: todayDate,
+    weatherCode: todayCode,
+    weatherText: weatherArea?.weathers?.[0]?.trim() ?? null,
+    // 短期予報の降水確率は数時間刻みなので、先頭(現在時刻以降で最初の区間)を
+    // 「今日の降水確率」の目安として使う。
+    pop: popArea?.pops?.[0] ? Number(popArea.pops[0]) : null,
+    tempMin: null,
+    tempMax: null,
+  };
 }

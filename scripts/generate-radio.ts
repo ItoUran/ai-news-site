@@ -30,7 +30,7 @@ const MAX_ARTICLES = Number(process.env.RADIO_MAX_ARTICLES ?? 15);
 // 1エピソードあたり数MBのWAVファイルが1日3回蓄積し続けると、Supabaseの無料枠の
 // ストレージ容量をいずれ圧迫する(=有料化を迫られる)ため、一定日数より古いエピソードは
 // 生成のたびに自動で削除する(音声ファイル・DB行の両方)。
-const RETENTION_DAYS = Number(process.env.RADIO_RETENTION_DAYS ?? 14);
+const RETENTION_DAYS = Number(process.env.RADIO_RETENTION_DAYS ?? 7);
 
 async function main() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {

@@ -152,6 +152,7 @@ src/
   config/
     sources.ts               # 収集元RSSフィードの初期シード
     jma-areas.ts              # 気象庁エリアコード一覧
+    jma-weather-icons.ts       # 天気コード→気象庁公式アイコンのマッピング
 supabase/migrations/          # SQLマイグレーション(番号順に適用)
 scripts/seed-sources.ts       # sources.ts → Supabase への投入スクリプト
 ```
@@ -501,7 +502,7 @@ VOICEVOXも確実に動作)を契約する方法もあります(この場合は�
   (元記事全文は保存するがUIには出さない)
 - **ラジオ音声のストレージ容量対策**: 1日3回・数MB/回の音声ファイルが無制限に蓄積すると
   Supabaseの無料ストレージ枠を圧迫するため、`scripts/generate-radio.ts` が生成のたびに
-  既定14日(`RADIO_RETENTION_DAYS`)より古いエピソードの音声ファイル・DB行を自動削除する
+  既定7日(`RADIO_RETENTION_DAYS`)より古いエピソードの音声ファイル・DB行を自動削除する
 
 **運用上ご確認いただきたい点**:
 - Supabaseの Authentication > Providers > Email で「Confirm email」を有効にすることを推奨します

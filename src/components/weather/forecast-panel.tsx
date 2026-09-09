@@ -1,5 +1,5 @@
 import type { NormalizedForecast } from "@/types/weather";
-import { weatherCodeToEmoji } from "@/lib/weather/jma";
+import { getJmaWeatherIconUrl } from "@/config/jma-weather-icons";
 
 export function ForecastPanel({ forecast }: { forecast: NormalizedForecast }) {
   return (
@@ -21,9 +21,18 @@ export function ForecastPanel({ forecast }: { forecast: NormalizedForecast }) {
             className="rounded-xl bg-card ring-1 ring-foreground/10 p-4 flex flex-col items-center gap-1 text-center"
           >
             <span className="text-xs text-muted-foreground">{formatShortDate(day.date)}</span>
-            <span className="text-3xl" aria-hidden>
-              {weatherCodeToEmoji(day.weatherCode)}
-            </span>
+            {getJmaWeatherIconUrl(day.weatherCode) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={getJmaWeatherIconUrl(day.weatherCode)!}
+                alt={day.weatherText ?? ""}
+                className="size-10"
+              />
+            ) : (
+              <span className="text-3xl" aria-hidden>
+                ❓
+              </span>
+            )}
             <span className="text-xs">{day.weatherText ?? "-"}</span>
             <div className="flex items-center gap-1.5 text-sm mt-1">
               {day.tempMin !== null && (

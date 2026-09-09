@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { RadioEpisodeRow } from "@/types/database";
 
 /** ラジオエピソード一覧を新しい順に取得 */
-export async function getRadioEpisodes(limit = 20): Promise<RadioEpisodeRow[]> {
+export async function getRadioEpisodes(limit = 30): Promise<RadioEpisodeRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("radio_episodes")
