@@ -15,8 +15,53 @@ export type IngestionRunResult = {
   articlesPassed: number;
   articlesFailed: number;
   deepDivesGenerated: number;
+  articlesDeleted: number;
   errors: RunError[];
 };
+
+// 記事の保持期間(収集日時 fetched_at 基準)。ブックマークされた記事は対象外(永久保持)。
+// Supabase無料枠のDB容量(500MB)を長期的に圧迫しないための自動クリーンアップ。
+const ARTICLE_RETENTION_DAYS = Number(process.env.ARTICLE_RETENTION_DAYS ?? 30);
+
+/**
+ * ARTICLE_RETENTION_DAYS より古い記事を削除する(誰かがブックマークしている記事は除く)。
+ * Gemini/Ollamaいずれの収集パイプラインからも呼ばれるため、収集の都度少しずつ実行され、
+ * 一度に大量削除が発生しにくい(削除に失敗しても収集自体は止めない)。
+ */
+async function cleanupOldArticles(supabase: SupabaseClient<Database>): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - ARTICLE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  try {
+    const { data: bookmarkedRows, error: bookmarkedError } = await supabase
+      .from("user_article_interactions")
+      .select("article_id")
+      .eq("bookmarked", true);
+    if (bookmarkedError) throw bookmarkedError;
+    const bookmarkedIds = new Set((bookmarkedRows ?? []).map((r) => r.article_id));
+
+    const { data: candidates, error: candidatesError } = await supabase
+      .from("articles")
+      .select("id")
+      .lt("fetched_at", cutoff);
+    if (candidatesError) throw candidatesError;
+
+    const idsToDelete = (candidates ?? [])
+      .map((a) => a.id)
+      .filter((id) => !bookmarkedIds.has(id));
+
+    if (idsToDelete.length === 0) return 0;
+
+    const { error: deleteError } = await supabase.from("articles").delete().in("id", idsToDelete);
+    if (deleteError) throw deleteError;
+
+    return idsToDelete.length;
+  } catch (err) {
+    console.error("[runIngestion] cleanupOldArticles failed:", String(err));
+    return 0;
+  }
+}
 
 export type AnalyzeArticleFn = (input: ArticleAnalysisInput) => Promise<ArticleAnalysisResult>;
 
@@ -171,6 +216,8 @@ export async function runIngestion(
     }
   }
 
+  const articlesDeleted = await cleanupOldArticles(supabase);
+
   await supabase.from("ingestion_runs").insert({
     started_at: startedAt,
     finished_at: new Date().toISOString(),
@@ -187,6 +234,7 @@ export async function runIngestion(
     articlesPassed,
     articlesFailed,
     deepDivesGenerated,
+    articlesDeleted,
     errors,
   };
 }

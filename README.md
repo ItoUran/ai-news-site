@@ -173,6 +173,10 @@ scripts/seed-sources.ts       # sources.ts → Supabase への投入スクリプ
   追加・解除でき、ヘッダー右上の星アイコンから一覧(`/bookmarks`)を確認できます。
   実体は既存の `user_article_interactions` テーブルに `bookmarked` カラムを追加したもの
   (いいね/よくないねと同じ仕組み)。
+- **記事の保持期間**: 収集日時から既定30日(`ARTICLE_RETENTION_DAYS`)より古い記事は、
+  収集パイプライン実行の都度自動削除されます(Supabase無料枠のDB容量対策)。
+  **誰かがブックマークした記事は対象外で永久保持**されます(`src/lib/ingestion/runIngestion.ts`
+  の `cleanupOldArticles`)。
 
 ## 無料で運用するには
 
