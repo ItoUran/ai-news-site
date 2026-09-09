@@ -12,16 +12,12 @@ export type RadioScriptResult = {
 const scriptJsonSchema = {
   type: "object",
   properties: {
-    title: {
-      type: "string",
-      description: "この回のタイトル(20字程度、例: 「9月4日 朝のニュースまとめ」)",
-    },
     script: {
       type: "string",
       description: "読み上げ用のラジオ台本本文(日本語、話し言葉)",
     },
   },
-  required: ["title", "script"],
+  required: ["script"],
 };
 
 /** 「2026年9月4日18時のニュースです。」のような冒頭の読み上げ文(AI生成ではなく、確実性のため決め打ちで組み立てる) */
@@ -31,6 +27,21 @@ function buildOpeningLine(now: Date): string {
   const d = now.getDate();
   const h = now.getHours();
   return `${y}年${m}月${d}日${h}時のニュースです。`;
+}
+
+/**
+ * 一覧ページに表示するタイトル。以前はAIに自由生成させていたため回によって
+ * 「AIニュースラジオ 2026年9月4日」「2026年9月4日のニュース」のように表記が
+ * バラバラになっていた。開始の読み上げ文と同様、確実性のため決め打ちで統一する
+ * (例: 「9月9日 夕方のニュース」)。日付グループ見出しで年・日付は既に分かるため、
+ * タイトル自体は月日+時間帯のみの簡潔な表記にしている。
+ */
+function buildEpisodeTitle(now: Date): string {
+  const m = now.getMonth() + 1;
+  const d = now.getDate();
+  const h = now.getHours();
+  const timeOfDay = h < 10 ? "朝" : h < 15 ? "昼" : "夕方";
+  return `${m}月${d}日 ${timeOfDay}のニュース`;
 }
 
 function buildPrompt(articles: ArticleRow[], dateLabel: string): string {
@@ -90,12 +101,12 @@ export async function generateRadioScript(
     stream: false,
   });
 
-  const parsed = JSON.parse(response.message.content) as Partial<RadioScriptResult>;
+  const parsed = JSON.parse(response.message.content) as { script?: string };
 
-  if (!parsed.script || !parsed.title) {
+  if (!parsed.script) {
     throw new Error("台本の生成に失敗しました(必須フィールドが空です)");
   }
 
   const script = `${buildOpeningLine(now)}\n${parsed.script}`;
-  return { title: parsed.title, script };
+  return { title: buildEpisodeTitle(now), script };
 }
